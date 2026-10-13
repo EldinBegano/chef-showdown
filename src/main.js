@@ -143,7 +143,7 @@ function setLobbyChar(slot, idx, { silhouette = false } = {}) {
     return;
   }
   s.model = buildCharacter(CHARACTERS[idx].id, { silhouette });
-  s.model.root.traverse((o) => o.isMesh && (o.castShadow = true));
+  s.model.root.traverse((o) => o.isMesh && !o.userData.outline && (o.castShadow = true));
   lobby.scene.add(s.model.root);
   s.stage.visible = true;
   s.hop = 0.35;

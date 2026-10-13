@@ -767,8 +767,7 @@ export class Game {
     animateRig(c.rig, dt, c.moving, false, this.t + seat.x);
     if (c.state === 'waiting' || c.state === 'eating') {
       const angry = c.mood === 'angry' || c.mood === 'meh';
-      c.rig.mouth.rotation.z = angry && !c.happy ? 0 : Math.PI;
-      c.rig.mouth.position.y = angry && !c.happy ? -0.12 : -0.09;
+      c.rig.expr = angry && !c.happy ? 'angry' : c.happy ? 'happy' : 'idle';
       c.shake = Math.max(0, c.shake - dt);
       c.rig.body.rotation.z = c.mood === 'angry' || c.shake > 0 ? Math.sin(this.t * 30) * 0.06 : 0;
       if (c.happy) c.rig.body.position.y = Math.abs(Math.sin(this.t * 12)) * 0.12;
