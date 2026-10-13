@@ -47,6 +47,7 @@ const STAGE_STYLE = {
   street: { color: '#e8317d', icon: 'tuna_maki' },
   burger: { color: '#f4a128', icon: 'deluxe' },
   happy: { color: '#9b4fd6', icon: 'milkshake' },
+  austria: { color: '#c8102e', icon: 'schnitzel' },
 };
 if (save.data.kitchen?.versus === 'diner') save.data.kitchen.versus = 'happy';
 for (const m of ['score', 'versus']) if (!LEVELS[save.data.kitchen?.[m]]) save.data.kitchen = { ...save.data.kitchen, [m]: m === 'score' ? 'sushi' : 'happy' };
@@ -902,7 +903,7 @@ function helpHtml(levelId) {
     <ol>
       <li>Grab a <b>tray</b> from the tray stack. The tray goes to the customer with their food, so take a fresh one for every order.</li>
       <li>Walk up to stations and <b>add</b> food to your tray. ${
-        { sushi: 'Every sushi starts with <b>rice</b>; toppings and nori go on the latest rice.', street: 'Every sushi starts with <b>rice</b>. Fish rides past on the <b>conveyor belt</b> up front: grab it as it goes by.', burger: 'Every burger starts with a <b>bun</b>; patty, cheese and lettuce stack on the latest bun.', happy: 'Each drink or treat is its own item.' }[levelId]
+        { sushi: 'Every sushi starts with <b>rice</b>; toppings and nori go on the latest rice.', street: 'Every sushi starts with <b>rice</b>. Fish rides past on the <b>conveyor belt</b> up front: grab it as it goes by.', burger: 'Every burger starts with a <b>bun</b>; patty, cheese and lettuce stack on the latest bun.', happy: 'Each drink or treat is its own item.', austria: 'A <b>Wiener Schnitzel</b> is three steps: hold to pound the veal, bread it, then hold to fry it in the pan. Pour beer at the tap; add Schlagobers to a Sachertorte slice for <i>mit Schlag</i>.' }[levelId]
       }</li>
       <li><b>Cookers</b> (${[...new Set(lv.stations.filter((s) => s.kind === 'batch').map((s) => s.name))].join(', ')}) must be started first, then make several servings. <b>Hold</b> the button to slice or pour.</li>
       <li>Serve customers at the counter before their patience runs out. Faster service means bigger tips.</li>

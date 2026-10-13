@@ -247,16 +247,19 @@ const OUTFITS = {
   },
 };
 
-function humanoid({ skin, outfit, outfitKey, pants, shoes = '#2b2b33', sleeves, forearms = sleeves, scale = 1, bulk = false, bareLegs = false }) {
+function humanoid({ skin, outfit, outfitKey, pants, shoes = '#2b2b33', sleeves, forearms = sleeves, scale = 1, bulk = false, slim = false, bareLegs = false, thighs = skin, calves = skin }) {
   const root = new THREE.Group();
   const body = new THREE.Group();
   root.add(body);
   const B = bulk
     ? { shoulderX: 0.4, shoulderY: 1.08, delt: 0.14, upper: 0.105, fore: 0.088, hand: 0.085, leg: 0.105, hipX: 0.13, pelvis: 0.5, neck: 0.12 }
-    : { shoulderX: 0.27, shoulderY: 1.07, delt: 0.075, upper: 0.066, fore: 0.058, hand: 0.068, leg: 0.085, hipX: 0.11, pelvis: 0.44, neck: 0.075 };
+    : slim
+      ? { shoulderX: 0.225, shoulderY: 1.07, delt: 0.056, upper: 0.05, fore: 0.047, hand: 0.056, leg: 0.07, hipX: 0.095, pelvis: 0.34, neck: 0.058 }
+      : { shoulderX: 0.27, shoulderY: 1.07, delt: 0.075, upper: 0.066, fore: 0.058, hand: 0.068, leg: 0.085, hipX: 0.11, pelvis: 0.44, neck: 0.075 };
 
   const torso = new THREE.Mesh(bulk ? torsoGeo(BULK_PROFILE, 'torsoBulk') : torsoGeo(TORSO_PROFILE, 'torso'), outfitMaterial(outfitKey, outfit));
-  torso.scale.z = bulk ? 0.62 : 0.7;
+  torso.scale.z = bulk ? 0.62 : slim ? 0.62 : 0.7;
+  if (slim) torso.scale.x = 0.82;
   torso.castShadow = true;
   torso.receiveShadow = true;
   body.add(torso);
@@ -268,8 +271,9 @@ function humanoid({ skin, outfit, outfitKey, pants, shoes = '#2b2b33', sleeves, 
     hip.position.set(x, 0.6, 0);
     if (bareLegs) {
       hip.add(mesh(capsule(0.14, 0.04), pants, 0, -0.05, 0));
-      hip.add(mesh(capsule(0.125, 0.14), skin, 0, -0.17, 0.01));
-      hip.add(mesh(capsule(0.092, 0.12), skin, 0, -0.38, -0.01));
+      const thin = bulk ? 1 : 0.72;
+      hip.add(mesh(capsule(0.125 * thin, 0.14), thighs, 0, -0.17, 0.01));
+      hip.add(mesh(capsule(0.092 * thin, 0.12), calves, 0, -0.38, -0.01));
     } else hip.add(mesh(capsule(B.leg, 0.3), pants, 0, -0.24, 0));
     hip.add(mesh(rbox(0.17 + (bulk ? 0.03 : 0), 0.1, 0.27, 0.045), shoes, 0, -0.55, 0.04));
     body.add(hip);
@@ -379,6 +383,50 @@ function mustache(head) {
     head.add(m);
   }
 }
+
+function taperedTube(points, radius, flatten = 0.45, segs = 48, radial = 12) {
+  const curve = new THREE.CatmullRomCurve3(points.map(([x, y, z]) => new THREE.Vector3(x, y, z)));
+  const geo = new THREE.TubeGeometry(curve, segs, 1, radial, false);
+  const pos = geo.attributes.position;
+  const v = new THREE.Vector3();
+  for (let i = 0; i <= segs; i++) {
+    const t = i / segs;
+    const c = curve.getPointAt(t);
+    const r = radius(t);
+    for (let j = 0; j <= radial; j++) {
+      const idx = i * (radial + 1) + j;
+      v.fromBufferAttribute(pos, idx).sub(c);
+      v.multiplyScalar(r);
+      v.z *= flatten;
+      pos.setXYZ(idx, c.x + v.x, c.y + v.y, c.z + v.z);
+    }
+  }
+  geo.computeVertexNormals();
+  return geo;
+}
+
+function faceDecal(radius, draw) {
+  const tex = canvasTexture(512, 256, (c, w, h) => {
+    c.clearRect(0, 0, w, h);
+    draw(c, w, h);
+  });
+  const geo = new THREE.SphereGeometry(radius, 32, 16, Math.PI / 2 - 0.62, 1.24, 1.12, 1.0);
+  return new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ map: tex, transparent: true, depthWrite: false }));
+}
+
+const petalGeo = cached('petal', () => {
+  const g = new THREE.SphereGeometry(0.06, 14, 12);
+  const pos = g.attributes.position;
+  for (let i = 0; i < pos.count; i++) {
+    const y = pos.getY(i);
+    if (y >= 0) continue;
+    const k = 1 + (y / 0.06) * 0.9;
+    pos.setX(i, pos.getX(i) * k);
+    pos.setZ(i, pos.getZ(i) * k);
+  }
+  g.computeVertexNormals();
+  return g;
+});
 
 export const CHARACTERS = [
   {
@@ -541,6 +589,223 @@ export const CHARACTERS = [
     },
   },
   {
+    id: 'miku', name: 'Miku', level: 1, tier: 'gold',
+    build() {
+      const skin = '#fbe4d8';
+      const teal = '#3cc6cc';
+      const tealDark = '#2a9aa2';
+      const black = '#26272d';
+      const skirtGray = '#3d4248';
+      const h = humanoid({
+        skin,
+        slim: true,
+        outfitKey: 'miku2',
+        outfit: (c, w, hgt) => {
+          c.fillStyle = '#c9cdd3';
+          c.fillRect(0, 0, w, hgt);
+          c.fillStyle = skin;
+          for (const x of [w * 0.25, w * 0.75]) {
+            c.beginPath();
+            c.ellipse(x, 0, 70, 62, 0, 0, Math.PI * 2);
+            c.fill();
+          }
+          c.fillStyle = skirtGray;
+          c.fillRect(w / 2 - 62, 0, 124, 26);
+          c.fillStyle = teal;
+          c.fillRect(w / 2 - 62, 24, 124, 5);
+          c.beginPath();
+          c.moveTo(w / 2 - 13, 26);
+          c.lineTo(w / 2 + 13, 26);
+          c.lineTo(w / 2 + 17, hgt - 18);
+          c.lineTo(w / 2, hgt);
+          c.lineTo(w / 2 - 17, hgt - 18);
+          c.fill();
+          c.fillStyle = tealDark;
+          c.fillRect(w / 2 - 15, 24, 30, 18);
+          c.fillStyle = '#d9b44a';
+          c.fillRect(w / 2 - 100, 78, 46, 10);
+          c.strokeStyle = 'rgba(0,0,0,0.08)';
+          c.lineWidth = 3;
+          c.beginPath();
+          c.moveTo(w / 2 + 30, 40);
+          c.lineTo(w / 2 + 30, hgt);
+          c.stroke();
+        },
+        sleeves: skin,
+        forearms: black,
+        pants: skirtGray,
+        shoes: black,
+        bareLegs: true,
+        calves: black,
+      });
+      const { head, body, armL, armR, elbowL, elbowR, legL, legR } = h.rig;
+
+      const pleats = canvasTexture(256, 64, (c, w, hh) => {
+        c.fillStyle = skirtGray;
+        c.fillRect(0, 0, w, hh);
+        for (let x = 0; x < w; x += 16) {
+          c.fillStyle = 'rgba(0,0,0,0.28)';
+          c.fillRect(x, 0, 4, hh);
+          c.fillStyle = 'rgba(255,255,255,0.06)';
+          c.fillRect(x + 4, 0, 3, hh);
+        }
+        c.fillStyle = teal;
+        c.fillRect(0, hh - 7, w, 7);
+      });
+      const skirt = new THREE.Mesh(new THREE.CylinderGeometry(0.19, 0.32, 0.25, 32, 1, true), texMat(pleats, { side: THREE.DoubleSide }));
+      skirt.position.y = 0.55;
+      skirt.castShadow = true;
+      body.add(skirt);
+
+      for (const arm of [armL, armR]) {
+        arm.add(mesh(capsule(0.058, 0.06), black, 0, -0.2, 0));
+        arm.add(mesh(cyl(0.062, 0.062, 0.025, 14), teal, 0, -0.15, 0));
+      }
+      for (const elbow of [elbowL, elbowR]) {
+        elbow.children[0].visible = false;
+        elbow.add(mesh(cyl(0.06, 0.1, 0.25, 16), black, 0, -0.13, 0));
+        elbow.add(mesh(cyl(0.102, 0.102, 0.03, 16), teal, 0, -0.255, 0));
+        elbow.children[1].position.y = -0.3;
+      }
+      for (const leg of [legL, legR]) {
+        leg.add(mesh(capsule(0.066, 0.1), black, 0, -0.25, 0.005));
+        leg.add(mesh(cyl(0.07, 0.07, 0.03, 14), teal, 0, -0.19, 0.005));
+        leg.add(mesh(rbox(0.15, 0.025, 0.26, 0.01), teal, 0, -0.6, 0.04));
+      }
+
+      head.children[0].material = mat(skin, { emissive: skin, emissiveIntensity: 0.22 });
+      head.scale.setScalar(1.04);
+      const cap = mesh(dome(0.296), teal, 0, 0.03, -0.015);
+      cap.scale.set(1, 1.05, 1.06);
+      cap.rotation.x = -0.08;
+      head.add(cap);
+      head.add(mesh(sph(0.285, 18, 12), teal, 0, -0.02, -0.065));
+      const fringe = new THREE.Mesh(new THREE.SphereGeometry(0.305, 32, 12, Math.PI / 2 - 1.15, 2.3, 0, 1.12), mat(teal));
+      fringe.castShadow = true;
+      head.add(fringe);
+      [[-0.225, -0.04, 0.05], [-0.15, 0.04, 0.05], [-0.075, 0.06, 0.048], [0, 0.0, 0.022], [0.075, 0.06, 0.048], [0.15, 0.04, 0.05], [0.225, -0.03, 0.05]].forEach(([x, bottom, hw]) => {
+        const yc = (0.125 + bottom) / 2;
+        const hh = (0.125 - bottom) / 2;
+        const z = Math.sqrt(Math.max(0, 0.305 * 0.305 - x * x - yc * yc)) - 0.008;
+        const clump = mesh(petalGeo, teal, x, yc, z);
+        clump.lookAt(x * 3, yc, z * 3);
+        clump.scale.set(hw / 0.06, hh / 0.06, 0.3);
+        clump.rotateZ(x * 0.8);
+        head.add(clump);
+      });
+      for (const x of [-0.235, 0.235]) {
+        const lock = mesh(capsule(0.05, 0.32), teal, x, -0.16, 0.06);
+        lock.scale.z = 0.55;
+        lock.rotation.z = x > 0 ? 0.08 : -0.08;
+        head.add(lock);
+      }
+
+      const tails = [];
+      for (const side of [-1, 1]) {
+        const tail = new THREE.Group();
+        tail.position.set(side * 0.24, 0.13, -0.07);
+        const pod = new THREE.Group();
+        pod.add(mesh(rbox(0.06, 0.15, 0.11, 0.02), black, 0, 0, 0));
+        pod.add(mesh(rbox(0.012, 0.15, 0.03, 0.004), '#e0408f', side * 0.03, 0, 0.025));
+        pod.add(mesh(rbox(0.012, 0.15, 0.015, 0.004), '#e0408f', side * 0.03, 0, -0.025));
+        pod.position.set(side * 0.035, 0.03, 0.01);
+        pod.rotation.z = side * -0.35;
+        tail.add(pod);
+        const geo = taperedTube(
+          [
+            [0, 0, 0],
+            [side * 0.16, -0.12, -0.05],
+            [side * 0.24, -0.45, -0.08],
+            [side * 0.22, -0.85, -0.06],
+            [side * 0.16, -1.18, -0.02],
+          ],
+          (t) => 0.05 + Math.sin(Math.min(1, t * 1.6) * Math.PI * 0.5) * 0.085 - Math.max(0, t - 0.6) * 0.3,
+          0.42,
+        );
+        const ribbon = new THREE.Mesh(geo, mat(teal));
+        ribbon.castShadow = true;
+        tail.add(ribbon);
+        head.add(tail);
+        tails.push(tail);
+      }
+      h.rig.tails = tails;
+
+      head.add(
+        faceDecal(0.273, (c) => {
+          c.save();
+          c.translate(256, 0);
+          c.scale(1.61, 1);
+          c.translate(-256, 0);
+          c.lineCap = 'round';
+          c.lineJoin = 'round';
+          for (const cx of [186, 326]) {
+            const out = cx < 256 ? -1 : 1;
+            const cy = 130;
+            c.fillStyle = 'rgba(246,140,160,0.45)';
+            c.beginPath();
+            c.ellipse(cx + out * 12, 196, 20, 11, 0, 0, Math.PI * 2);
+            c.fill();
+            c.fillStyle = '#ffffff';
+            c.beginPath();
+            c.ellipse(cx, cy, 33, 42, 0, 0, Math.PI * 2);
+            c.fill();
+            const g = c.createLinearGradient(0, cy - 36, 0, cy + 38);
+            g.addColorStop(0, '#16606a');
+            g.addColorStop(0.5, '#2fb2ba');
+            g.addColorStop(1, '#8de8e4');
+            c.fillStyle = g;
+            c.beginPath();
+            c.ellipse(cx, cy + 4, 27, 37, 0, 0, Math.PI * 2);
+            c.fill();
+            c.fillStyle = '#0f3a42';
+            c.beginPath();
+            c.ellipse(cx, cy + 2, 12, 19, 0, 0, Math.PI * 2);
+            c.fill();
+            c.fillStyle = '#ffffff';
+            c.beginPath();
+            c.ellipse(cx + 10, cy - 14, 9, 11, 0, 0, Math.PI * 2);
+            c.fill();
+            c.beginPath();
+            c.arc(cx - 10, cy + 20, 5, 0, Math.PI * 2);
+            c.fill();
+            c.strokeStyle = '#22252b';
+            c.lineWidth = 9;
+            c.beginPath();
+            c.ellipse(cx, cy + 2, 34, 43, 0, Math.PI * 1.08, Math.PI * 1.92);
+            c.stroke();
+            c.lineWidth = 5;
+            c.beginPath();
+            c.moveTo(cx + out * 32, cy - 16);
+            c.lineTo(cx + out * 44, cy - 26);
+            c.stroke();
+          }
+          c.fillStyle = 'rgba(205,120,110,0.55)';
+          c.beginPath();
+          c.ellipse(256, 170, 4, 3, 0, 0, Math.PI * 2);
+          c.fill();
+          c.fillStyle = '#b8344a';
+          c.beginPath();
+          c.moveTo(236, 186);
+          c.quadraticCurveTo(256, 192, 276, 186);
+          c.quadraticCurveTo(272, 210, 256, 210);
+          c.quadraticCurveTo(240, 210, 236, 186);
+          c.fill();
+          c.fillStyle = '#f2849a';
+          c.beginPath();
+          c.ellipse(256, 203, 10, 5, 0, 0, Math.PI * 2);
+          c.fill();
+          c.restore();
+        }),
+      );
+      for (const side of [-1, 1]) {
+        put(head, mesh(cyl(0.065, 0.065, 0.05, 16), black, side * 0.29, -0.02, 0.0)).rotation.z = Math.PI / 2;
+        put(head, mesh(cyl(0.035, 0.035, 0.055, 12), teal, side * 0.296, -0.02, 0.0)).rotation.z = Math.PI / 2;
+      }
+      h.rig.idle = 'pose';
+      return h;
+    },
+  },
+  {
     id: 'bandit', name: 'Bandit', level: 5, tier: 'gold',
     build() {
       const h = humanoid({ skin: '#7c7c86', outfitKey: 'bandit', outfit: OUTFITS.vest('#1e1e22', '#f2f2f2', '#e8c23a'), sleeves: '#f2f2f2', pants: '#3d2c22', shoes: '#ececec' });
@@ -667,11 +932,26 @@ export function animateRig(rig, dt, moveAmt, carrying, t) {
     aimArm(rig.armR, rig.elbowR, swing * 0.8, 0, 0.1 + out, -0.25 - target * 0.35, 0, k);
   }
   rig.head.rotation.z = Math.sin(t * 1.3 + rig.phase * 0.1) * 0.03 * (1 - target);
+  if (rig.tails)
+    rig.tails.forEach((tl, i) => {
+      tl.rotation.x = lerp(tl.rotation.x, 0.12 + target * 0.5 + Math.abs(Math.sin(rig.phase)) * 0.08 * target, k);
+      tl.rotation.z = lerp(tl.rotation.z, (i ? 1 : -1) * (0.06 + Math.sin(rig.phase * 0.5 + i) * 0.05 * target), k);
+    });
 }
 
 export function poseIdle(rig, t) {
   rig.body.position.y = Math.sin(t * 2) * 0.01;
-  if (rig.idle === 'flex') {
+  if (rig.tails) rig.tails.forEach((tl, i) => {
+    tl.rotation.x = 0.1 + Math.sin(t * 1.6 + i) * 0.03;
+    tl.rotation.z = (i ? 1 : -1) * (0.06 + Math.sin(t * 1.3 + i * 2) * 0.03);
+  });
+  if (rig.idle === 'pose') {
+    aimArm(rig.armL, rig.elbowL, 0, 0, -0.5, 0, 0, 1, 1.9);
+    aimArm(rig.armR, rig.elbowR, -0.55, 0, 2.45, 0, 0, 1, 1.25 + Math.sin(t * 1.5) * 0.06);
+  } else if (rig.idle === 'wave') {
+    aimArm(rig.armL, rig.elbowL, 0, 0, -0.55, 0, 0, 1, 1.9);
+    aimArm(rig.armR, rig.elbowR, 0, 0, 2.45, 0, 0, 1, 0.35 + Math.sin(t * 6) * 0.4);
+  } else if (rig.idle === 'flex') {
     const squeeze = 0.12 + Math.max(0, Math.sin(t * 2.2)) * 0.18;
     aimArm(rig.armL, rig.elbowL, -0.15, 0, -1.45, 0, 0, 1, -1.75 - squeeze);
     aimArm(rig.armR, rig.elbowR, -0.15, 0, 1.45, 0, 0, 1, 1.75 + squeeze);
@@ -789,6 +1069,38 @@ export function cup(color, liquid, h = 0.13, r = 0.05) {
   return g;
 }
 
+function cutlet(color) {
+  const g = new THREE.Group();
+  const pl = mesh(cyl(0.11, 0.09, 0.025, 20), '#f7f4ee', 0, 0.012, 0);
+  pl.scale.x = 1.3;
+  g.add(pl);
+  const c = mesh(sph(0.1, 14, 8), color, -0.01, 0.035, 0);
+  c.scale.set(1.25, 0.18, 0.85);
+  g.add(c);
+  return g;
+}
+
+function sacherSlice(cream) {
+  const g = group(plate());
+  const wedge = (r, h, y, color) => {
+    const m = new THREE.Mesh(new THREE.CylinderGeometry(r, r, h, 12, 1, false, 0, Math.PI / 3), mat(color));
+    m.position.set(-0.04, y, -0.02);
+    m.castShadow = true;
+    g.add(m);
+  };
+  wedge(0.1, 0.035, 0.04, '#5a3220');
+  wedge(0.1, 0.01, 0.063, '#f0a030');
+  wedge(0.1, 0.035, 0.085, '#5a3220');
+  wedge(0.102, 0.012, 0.108, '#2a140a');
+  if (cream) {
+    const d = mesh(sph(0.035, 10, 8), '#fffaf2', 0.06, 0.04, 0.05);
+    d.scale.y = 0.8;
+    g.add(d);
+    g.add(mesh(cone(0.012, 0.03, 8), '#fffaf2', 0.06, 0.075, 0.05));
+  }
+  return g;
+}
+
 const DISH_BUILDERS = {
   rice: riceBowl,
   salmon_nigiri: () => nigiri('salmon'),
@@ -854,6 +1166,42 @@ const DISH_BUILDERS = {
     const g = cup('#fde3ec', '#f48fb1', 0.15, 0.045);
     put(g, mesh(sph(0.05, 12, 8), '#ffffff', 0, 0.16, 0)).scale.y = 0.7;
     g.add(mesh(sph(0.02, 8, 6), '#d4182d', 0, 0.2, 0));
+    return g;
+  },
+  schnitzel_raw: () => cutlet('#e98f8a'),
+  schnitzel_breaded: () => cutlet('#e7d2a2'),
+  schnitzel() {
+    const g = cutlet('#d6953a');
+    const lemon = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, 0.02, 12, 1, false, 0, Math.PI), mat('#f6d33a'));
+    lemon.rotation.x = Math.PI / 2;
+    lemon.position.set(0.09, 0.05, 0.04);
+    g.add(lemon);
+    g.add(mesh(sph(0.018, 8, 6), '#4caf50', 0.09, 0.05, -0.04));
+    return g;
+  },
+  beer() {
+    const g = new THREE.Group();
+    const glass = new THREE.Mesh(cyl(0.05, 0.045, 0.15, 16), new THREE.MeshToonMaterial({ color: '#f2b632', transparent: true, opacity: 0.9 }));
+    glass.position.y = 0.075;
+    g.add(glass);
+    put(g, mesh(sph(0.052, 12, 8), '#fffaf0', 0, 0.15, 0)).scale.y = 0.55;
+    g.add(mesh(torus(0.035, 0.01, 10), '#e8eef2', 0.058, 0.08, 0));
+    return g;
+  },
+  sacher: () => sacherSlice(false),
+  sacher_schlag: () => sacherSlice(true),
+  schmarrn() {
+    const g = group(plate());
+    const pieces = [[0, 0], [0.04, 0.03], [-0.04, 0.02], [0.02, -0.04], [-0.03, -0.03], [0.0, 0.0]];
+    pieces.forEach(([x, z], i) => {
+      const p = mesh(rbox(0.05, 0.03, 0.04, 0.012), i % 2 ? '#e3a64a' : '#f0c46a', x, 0.035 + (i === 5 ? 0.03 : 0), z);
+      p.rotation.set(i * 0.7, i * 1.3, i * 0.4);
+      g.add(p);
+    });
+    g.add(mesh(sph(0.02, 8, 6), '#ffffff', 0.01, 0.075, 0));
+    const compote = mesh(cyl(0.03, 0.025, 0.025, 12), '#f7f4ee', -0.07, 0.025, 0.05);
+    g.add(compote);
+    g.add(mesh(cyl(0.025, 0.025, 0.006, 12), '#6a2a5a', -0.07, 0.04, 0.05));
     return g;
   },
   cake() {

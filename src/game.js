@@ -276,7 +276,7 @@ export class Game {
     };
     this.showCount(this.mode.duration ? "Time's up!" : 'Closed!', 'go');
     this.emit({ k: 'end', r: result });
-    setTimeout(() => this.onEnd(result), 1600);
+    setTimeout(() => !this.disposed && this.onEnd(result), 1600);
   }
 
   movePlayer(p, input, dt) {
@@ -335,7 +335,7 @@ export class Game {
       p.sfxT -= dt;
       if (p.sfxT <= 0) {
         p.sfxT = 0.16;
-        this.play(['salmon', 'tamago', 'lettuce'].includes(st.cfg.model) ? 'chop' : 'pour', p);
+        this.play(['salmon', 'tamago', 'lettuce', 'meat'].includes(st.cfg.model) ? 'chop' : 'pour', p);
       }
       if (p.holdT >= st.cfg.time) {
         this.addToTray(p, st.cfg.gives);
@@ -799,6 +799,13 @@ export class Game {
     }
   }
 
+  stationProgress(st) {
+    const cfg = st.cfg;
+    if (!cfg.time) return 0;
+    if (cfg.kind === 'hold') return st.holder ? st.holder.holdT / cfg.time : 0;
+    return st.timer / cfg.time;
+  }
+
   verbFor(st, p) {
     const kind = st.cfg.kind;
     if (kind === 'tray') return p.tray ? (p.tray.items.length ? 'Busy' : 'Return') : 'Grab';
@@ -828,7 +835,7 @@ export class Game {
       }
     }
     const active = !!st.holder;
-    st.model.setState(st.state, this.t, active, st.servings, cfg.time ? st.timer / cfg.time : 0);
+    st.model.setState(st.state, this.t, active, st.servings, this.stationProgress(st));
     const targeted = this.players.some((p) => p.target?.st === st);
     const s = 1 + (targeted ? Math.sin(this.t * 8) * 0.025 + 0.03 : 0);
     st.group.scale.setScalar(st.baseScale * s);
@@ -1148,7 +1155,7 @@ export class Game {
         break;
       case 'end':
         this.phase = 'over';
-        setTimeout(() => this.onEnd(ev.r), 1600);
+        setTimeout(() => !this.disposed && this.onEnd(ev.r), 1600);
         break;
     }
   }
@@ -1199,7 +1206,7 @@ export class Game {
           it.mesh.position.x = it.x;
           it.mesh.rotation.y += dt * 0.6;
         }
-      st.model.setState(st.state, this.t, !!st.holder, st.servings, st.cfg.time ? st.timer / st.cfg.time : 0);
+      st.model.setState(st.state, this.t, !!st.holder, st.servings, this.stationProgress(st));
       const pulse = me.target?.st === st ? Math.sin(this.t * 8) * 0.025 + 0.03 : 0;
       st.group.scale.setScalar(st.baseScale * (1 + pulse));
     }
@@ -1251,6 +1258,7 @@ export class Game {
   }
 
   dispose() {
+    this.disposed = true;
     this.overlay.innerHTML = '';
   }
 }

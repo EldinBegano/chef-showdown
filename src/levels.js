@@ -1,4 +1,4 @@
-import { buildSushiBar, buildSushiStreet, buildBurgerDiner, buildHappyHour } from './maps.js';
+import { buildSushiBar, buildSushiStreet, buildBurgerDiner, buildHappyHour, buildWirtshaus } from './maps.js';
 
 export const TRAY_CAP = 3;
 
@@ -61,6 +61,43 @@ function burgerCompose(items, comp) {
   }
   if (next.length >= TRAY_CAP) return { error: 'Tray is full!' };
   next.push({ kind: comp });
+  return { items: next };
+}
+
+function austrianDishId(d) {
+  if (d.kind === 'schnitzel') return d.fried ? 'schnitzel' : d.breaded ? 'schnitzel_breaded' : 'schnitzel_raw';
+  if (d.kind === 'sacher') return d.cream ? 'sacher_schlag' : 'sacher';
+  return d.kind;
+}
+
+function austrianCompose(items, comp) {
+  const next = items.map((d) => ({ ...d }));
+  const full = next.length >= TRAY_CAP;
+  if (comp === 'meat') {
+    if (full) return { error: 'Tray is full!' };
+    next.push({ kind: 'schnitzel', breaded: false, fried: false });
+    return { items: next };
+  }
+  if (comp === 'crumbs') {
+    const d = next.findLast((x) => x.kind === 'schnitzel' && !x.breaded);
+    if (!d) return { error: 'Pound some veal first!' };
+    d.breaded = true;
+    return { items: next };
+  }
+  if (comp === 'fry') {
+    const d = next.findLast((x) => x.kind === 'schnitzel' && x.breaded && !x.fried);
+    if (!d) return { error: next.some((x) => x.kind === 'schnitzel' && !x.breaded) ? 'Bread it first!' : 'Nothing to fry!' };
+    d.fried = true;
+    return { items: next };
+  }
+  if (comp === 'cream') {
+    const d = next.findLast((x) => x.kind === 'sacher' && !x.cream);
+    if (!d) return { error: 'Grab a slice of Sachertorte first!' };
+    d.cream = true;
+    return { items: next };
+  }
+  if (full) return { error: 'Tray is full!' };
+  next.push(comp === 'sacher' ? { kind: 'sacher', cream: false } : { kind: comp });
   return { items: next };
 }
 
@@ -217,7 +254,43 @@ export const LEVELS = {
   },
 };
 
-export const LEVEL_ORDER = ['sushi', 'street', 'burger', 'happy'];
+LEVELS.austria = {
+  id: 'austria',
+  name: 'Wiener Wirtshaus',
+  blurb: 'Schnitzel, Bier und Sachertorte',
+  build: buildWirtshaus,
+  seats: [-2.4, -0.8, 0.8, 2.4],
+  stations: [
+    { id: 'meat', name: 'Veal', kind: 'hold', model: 'meat', side: 'left', z: -1.7, time: 0.9, gives: 'meat' },
+    { id: 'crumbs', name: 'Breading', kind: 'instant', model: 'crumbs', side: 'left', z: -0.5, gives: 'crumbs' },
+    { id: 'pan', name: 'Frying Pan', kind: 'hold', model: 'pan', side: 'left', z: 0.7, time: 1.4, gives: 'fry' },
+    { id: 'schmarrn', name: 'Kaiserschmarrn', kind: 'batch', model: 'schmarrn', side: 'left', z: 1.9, time: 5, servings: 3, gives: 'schmarrn' },
+    { id: 'trays', name: 'Trays', kind: 'tray', model: 'trays', side: 'right', z: -1.7 },
+    { id: 'tap', name: 'Beer Tap', kind: 'hold', model: 'beertap', side: 'right', z: -0.5, time: 1.2, gives: 'beer' },
+    { id: 'sacher', name: 'Sachertorte', kind: 'instant', model: 'sacher', side: 'right', z: 0.7, gives: 'sacher' },
+    { id: 'cream', name: 'Schlagobers', kind: 'instant', model: 'cream', side: 'right', z: 1.9, gives: 'cream' },
+    { id: 'slotL', name: 'Plate', kind: 'slot', model: 'slot', side: 'front', x: -1.3 },
+    { id: 'trash', name: 'Recycle', kind: 'trash', model: 'trash', side: 'front', x: 0 },
+    { id: 'slotR', name: 'Plate', kind: 'slot', model: 'slot', side: 'front', x: 1.3 },
+  ],
+  menu: {
+    schnitzel: { name: 'Wiener Schnitzel', price: 11, steps: ['meat', 'crumbs', 'fry'] },
+    beer: { name: 'Bier', price: 4, steps: ['beer'] },
+    sacher: { name: 'Sachertorte', price: 6, steps: ['sacher'] },
+    schmarrn: { name: 'Kaiserschmarrn', price: 7, steps: ['schmarrn'] },
+    sacher_schlag: { name: 'Sacher mit Schlag', price: 8, steps: ['sacher', 'cream'] },
+  },
+  unlocks: [
+    { at: 0, dishes: ['schnitzel', 'beer'] },
+    { at: 30, dishes: ['sacher'] },
+    { at: 70, dishes: ['schmarrn'] },
+    { at: 120, dishes: ['sacher_schlag'] },
+  ],
+  compose: austrianCompose,
+  dishId: austrianDishId,
+};
+
+export const LEVEL_ORDER = ['sushi', 'street', 'burger', 'happy', 'austria'];
 
 export const MODES = {
   score: { id: 'score', title: 'Score Attack', lives: 3 },

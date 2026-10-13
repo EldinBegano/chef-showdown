@@ -20,6 +20,7 @@ Pressing Play opens a **Pick a stage** screen. Every map works in both modes:
 | Sushi Street | Night street stall. Fish rides past on a conveyor belt at the front; grab it as it goes by |
 | Burger Diner | 50s diner. Bun, then patty/cheese/lettuce stack on the latest bun; grill and fryer cook in batches |
 | Happy Hour | Neon drinks bar: pour lemonade, root beer and cola; brew coffee; blend shakes |
+| Wiener Wirtshaus | Austrian tavern. Wiener Schnitzel takes three steps (pound the veal, bread it, fry it); pour Bier at the tap; Sachertorte with or without Schlagobers; Kaiserschmarrn cooks in batches |
 
 Maps live in `src/maps.js`, station models in `src/stations.js`, recipes and layouts in `src/levels.js`.
 

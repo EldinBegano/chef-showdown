@@ -933,3 +933,242 @@ export function buildHappyHour(scene) {
     },
   };
 }
+
+function alpsTexture() {
+  return canvasTexture(512, 320, (c, w, h) => {
+    const sky = c.createLinearGradient(0, 0, 0, h);
+    sky.addColorStop(0, '#6fb2e8');
+    sky.addColorStop(0.6, '#d8eefa');
+    c.fillStyle = sky;
+    c.fillRect(0, 0, w, h);
+    const peak = (x, y, half, base, color) => {
+      c.fillStyle = color;
+      c.beginPath();
+      c.moveTo(x - half, base);
+      c.lineTo(x, y);
+      c.lineTo(x + half, base);
+      c.fill();
+      c.fillStyle = '#ffffff';
+      c.beginPath();
+      c.moveTo(x - half * 0.32, y + (base - y) * 0.32);
+      c.lineTo(x, y);
+      c.lineTo(x + half * 0.32, y + (base - y) * 0.32);
+      c.lineTo(x + half * 0.12, y + (base - y) * 0.26);
+      c.lineTo(x - half * 0.05, y + (base - y) * 0.36);
+      c.fill();
+    };
+    peak(110, 70, 170, 260, '#8a9cb4');
+    peak(330, 40, 210, 260, '#7a8ca6');
+    peak(470, 95, 140, 260, '#91a3ba');
+    c.fillStyle = '#6aa64a';
+    c.beginPath();
+    c.moveTo(0, 230);
+    c.quadraticCurveTo(140, 190, 280, 225);
+    c.quadraticCurveTo(410, 255, w, 215);
+    c.lineTo(w, h);
+    c.lineTo(0, h);
+    c.fill();
+    c.fillStyle = '#2f5a2e';
+    for (let i = 0; i < 14; i++) {
+      const x = 20 + i * 36 + (i % 3) * 6;
+      const y = 240 + (i % 2) * 14;
+      c.beginPath();
+      c.moveTo(x - 9, y + 30);
+      c.lineTo(x, y);
+      c.lineTo(x + 9, y + 30);
+      c.fill();
+    }
+  });
+}
+
+function bunting(scene, a, b, sag, count, list) {
+  const pts = [];
+  for (let i = 0; i <= 20; i++) {
+    const k = i / 20;
+    pts.push(new THREE.Vector3().lerpVectors(a, b, k).add(new THREE.Vector3(0, -Math.sin(k * Math.PI) * sag, 0)));
+  }
+  const curve = new THREE.CatmullRomCurve3(pts);
+  scene.add(new THREE.Mesh(new THREE.TubeGeometry(curve, 30, 0.012, 4), mat('#e8e2d0')));
+  const tri = new THREE.Shape();
+  tri.moveTo(-0.16, 0);
+  tri.lineTo(0.16, 0);
+  tri.lineTo(0, -0.34);
+  const geo = new THREE.ShapeGeometry(tri);
+  for (let i = 0; i < count; i++) {
+    const p = curve.getPoint((i + 0.5) / count);
+    const f = new THREE.Mesh(geo, new THREE.MeshToonMaterial({ color: i % 2 ? '#ffffff' : '#c8102e', side: THREE.DoubleSide }));
+    f.position.copy(p);
+    scene.add(f);
+    list.push(f);
+  }
+}
+
+export function buildWirtshaus(scene) {
+  lights(scene, { bg: '#2a1a10', sky: '#ffe6c4', ground: '#4a2e1a', hemi: 0.85, key: '#fff0d8', keyInt: 1.3, warm: '#ffbf6a', warmInt: 50 });
+  const terracotta = canvasTexture(256, 256, (c, w) => {
+    c.fillStyle = '#7a4a32';
+    c.fillRect(0, 0, w, w);
+    const n = 4;
+    const s = w / n;
+    for (let y = 0; y < n; y++)
+      for (let x = 0; x < n; x++) {
+        c.fillStyle = ['#b5543a', '#c2603f', '#a94c34', '#bb5a3c'][(x * 3 + y * 5) % 4];
+        c.fillRect(x * s + 3, y * s + 3, s - 6, s - 6);
+      }
+  });
+  kitchenBase(scene, {
+    pit: terracotta,
+    pitScale: 1.2,
+    deck: planksTex('#c89a62', '#8a5e34'),
+    shelf: planksTex('#d8aa72', '#9a6e44', 3),
+    deckSide: '#7a4e2c',
+    rim: '#3e2a1c',
+    counter: '#5a3a22',
+    counterSide: '#3e2716',
+    outer: planksTex('#8a5a34', '#5a3a1e'),
+    outerScale: 3,
+    street: planksTex('#7a4e2c', '#4a2e18'),
+    streetScale: 2,
+    glow: '#ffd890',
+  });
+
+  wallWithWainscot(scene, -16, 16, -6.2, '#efe4cf', '#6b4426', 6);
+  for (const x of [-12, -8, 8, 12]) scene.add(mesh(rbox(0.3, 6, 0.3, 0.04), '#4a2e1a', x, 3, -6.05));
+  const alps = alpsTexture();
+  for (const x of [-4.2, 0, 4.2]) {
+    const frame = new THREE.Group();
+    frame.add(mesh(rbox(2.0, 1.7, 0.12, 0.04), '#4a2e1a', 0, 0, 0));
+    const view = new THREE.Mesh(new THREE.PlaneGeometry(1.76, 1.46), texMat(alps, { emissive: '#ffffff', emissiveIntensity: 0.35 }));
+    view.position.z = 0.065;
+    frame.add(view);
+    frame.add(mesh(rbox(0.06, 1.46, 0.06, 0.01), '#4a2e1a', 0, 0, 0.09));
+    frame.add(mesh(rbox(1.76, 0.06, 0.06, 0.01), '#4a2e1a', 0, 0.1, 0.09));
+    frame.add(mesh(rbox(2.1, 0.12, 0.3, 0.03), '#4a2e1a', 0, -0.9, 0.12));
+    const box = mesh(rbox(1.7, 0.22, 0.24, 0.04), '#3e7a3a', 0, -0.72, 0.22);
+    frame.add(box);
+    for (let i = 0; i < 9; i++) {
+      frame.add(mesh(sph(0.07, 8, 6), i % 3 ? '#d8263a' : '#e8506a', -0.72 + i * 0.18, -0.56 + (i % 2) * 0.04, 0.24));
+      frame.add(mesh(sph(0.06, 8, 6), '#4a8a3a', -0.64 + i * 0.16, -0.63, 0.3));
+    }
+    frame.position.set(x, 2.5, -6.05);
+    scene.add(frame);
+  }
+
+  const antlers = (x) => {
+    const g = new THREE.Group();
+    g.add(mesh(rbox(0.5, 0.6, 0.08, 0.06), '#6b4426', 0, 0, 0));
+    g.add(mesh(sph(0.12, 10, 8), '#e8dcc0', 0, 0.02, 0.08));
+    for (const side of [-1, 1]) {
+      const beam = mesh(cyl(0.025, 0.035, 0.6, 6), '#e8dcc0', side * 0.18, 0.3, 0.1);
+      beam.rotation.z = -side * 0.6;
+      g.add(beam);
+      for (const [y, len] of [[0.18, 0.2], [0.35, 0.18], [0.5, 0.14]]) {
+        const tine = mesh(cyl(0.015, 0.022, len, 6), '#e8dcc0', side * (0.12 + y * 0.45), y + 0.1, 0.12);
+        tine.rotation.z = side * 0.4;
+        g.add(tine);
+      }
+    }
+    g.position.set(x, 3.55, -6.0);
+    return g;
+  };
+  scene.add(antlers(-2.1), antlers(2.1));
+
+  for (const z of [-5.4, -3.6, -1.6]) scene.add(mesh(rbox(18, 0.28, 0.32, 0.04), '#3e2716', 0, 4.7, z));
+
+  const signTex = canvasTexture(512, 128, (c, w, h) => {
+    c.fillStyle = '#3e2716';
+    c.fillRect(0, 0, w, h);
+    c.fillStyle = '#c8102e';
+    c.fillRect(0, 0, w, 14);
+    c.fillRect(0, h - 14, w, 14);
+    c.fillStyle = '#ffffff';
+    c.fillRect(0, 14, w, 6);
+    c.fillRect(0, h - 20, w, 6);
+    c.font = 'bold 66px Georgia, "Times New Roman", serif';
+    c.textAlign = 'center';
+    c.textBaseline = 'middle';
+    c.fillStyle = '#f2c14a';
+    c.fillText('Wirtshaus', w / 2, h / 2 + 3);
+  });
+  const sign = new THREE.Mesh(new THREE.BoxGeometry(3.2, 0.8, 0.08), [mat('#3e2716'), mat('#3e2716'), mat('#3e2716'), mat('#3e2716'), texMat(signTex, { emissive: '#ffffff', emissiveIntensity: 0.15 }), mat('#3e2716')]);
+  sign.position.set(0, 3.75, -3.55);
+  scene.add(sign);
+  for (const x of [-1.4, 1.4]) scene.add(mesh(cyl(0.012, 0.012, 0.6, 4), '#222', x, 4.4, -3.55));
+
+  const flags = [];
+  bunting(scene, new THREE.Vector3(-9, 4.4, -1.6), new THREE.Vector3(-1, 4.2, -3.6), 0.5, 9, flags);
+  bunting(scene, new THREE.Vector3(1, 4.2, -3.6), new THREE.Vector3(9, 4.4, -1.6), 0.5, 9, flags);
+
+  const lamps = [];
+  for (const x of [-2.4, 0, 2.4]) {
+    scene.add(mesh(cyl(0.01, 0.01, 0.9, 4), '#222', x, 4.25, -2.95));
+    const shadeM = mesh(dome(0.28), '#2e6b4a', x, 3.7, -2.95);
+    scene.add(shadeM);
+    const bulb = new THREE.Mesh(sph(0.09, 10, 8), glow('#ffe2a8'));
+    bulb.position.set(x, 3.68, -2.95);
+    scene.add(bulb);
+    lamps.push(shadeM);
+  }
+
+  const stove = new THREE.Group();
+  const tiles = canvasTexture(128, 128, (c, w) => {
+    c.fillStyle = '#e8dcc0';
+    c.fillRect(0, 0, w, w);
+    for (let y = 0; y < 4; y++)
+      for (let x = 0; x < 4; x++) {
+        c.fillStyle = (x + y) % 2 ? '#2e6b4a' : '#3a7f58';
+        c.fillRect(x * 32 + 2, y * 32 + 2, 28, 28);
+      }
+  });
+  const tileMat = texMat(tiles);
+  const tileBox = (w, h, d, y) => {
+    const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), tileMat);
+    m.position.y = y;
+    m.castShadow = true;
+    stove.add(m);
+  };
+  tileBox(1.6, 1.2, 1.2, 0.6);
+  tileBox(1.3, 1.0, 1.0, 1.7);
+  stove.add(mesh(rbox(1.4, 0.12, 1.1, 0.03), '#e8dcc0', 0, 2.26, 0));
+  stove.add(mesh(rbox(2.4, 0.12, 0.5, 0.03), '#8a5a34', 0, 0.45, 0.85));
+  stove.position.set(-8.2, 0, -4.6);
+  scene.add(stove);
+
+  const cloth = checkerTex('#c8102e', '#ffffff', 8);
+  const table = (x, z) => {
+    const g = new THREE.Group();
+    const top = new THREE.Mesh(new THREE.BoxGeometry(1.9, 0.08, 1.1), [mat('#c8102e'), mat('#c8102e'), texMat(tiled(cloth, 1.2, 0.7)), mat('#8a5a34'), mat('#c8102e'), mat('#c8102e')]);
+    top.position.y = 0.82;
+    top.castShadow = true;
+    top.receiveShadow = true;
+    g.add(top);
+    for (const [dx, dz] of [[-0.8, -0.4], [0.8, -0.4], [-0.8, 0.4], [0.8, 0.4]]) g.add(mesh(rbox(0.1, 0.8, 0.1, 0.02), '#6b4426', dx, 0.4, dz));
+    for (const dz of [-0.85, 0.85]) g.add(mesh(rbox(1.9, 0.1, 0.35, 0.03), '#8a5a34', 0, 0.48, dz));
+    for (const [id, dx, dz, sc] of [['schnitzel', -0.4, -0.15, 2], ['beer', 0.3, 0.1, 2], ['beer', -0.1, 0.25, 2], ['sacher', 0.6, -0.2, 2]]) {
+      const d = buildDish(id);
+      d.scale.setScalar(sc);
+      d.position.set(dx, 0.86, dz);
+      g.add(d);
+    }
+    g.position.set(x, 0, z);
+    return g;
+  };
+  scene.add(table(-7.6, -0.6), table(7.6, -0.6), table(-7.9, 2.9), table(7.9, 2.9));
+
+  const barrel = (x, y, z) => {
+    const g = new THREE.Group();
+    put(g, mesh(cyl(0.42, 0.42, 0.9, 16), '#8a4b25', 0, 0, 0)).rotation.z = Math.PI / 2;
+    for (const dx of [-0.3, 0.3]) put(g, mesh(torus(0.425, 0.025, 18), '#2a2a2a', dx, 0, 0)).rotation.y = Math.PI / 2;
+    put(g, mesh(cyl(0.12, 0.12, 0.02, 12), '#c8102e', 0.46, 0, 0)).rotation.z = Math.PI / 2;
+    g.position.set(x, y, z);
+    return g;
+  };
+  scene.add(barrel(7.4, 0.42, -4.8), barrel(8.3, 0.42, -4.8), barrel(7.85, 1.2, -4.8));
+
+  return {
+    tick(t) {
+      flags.forEach((f, i) => (f.rotation.x = Math.sin(t * 1.8 + i) * 0.25));
+      lamps.forEach((l, i) => (l.rotation.z = Math.sin(t * 1.1 + i) * 0.03));
+    },
+  };
+}

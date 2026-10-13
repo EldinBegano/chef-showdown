@@ -476,6 +476,176 @@ const B = {
       },
     };
   },
+  meat() {
+    const g = new THREE.Group();
+    g.add(mesh(rbox(0.74, 0.18, 0.58, 0.04), '#9a6438', 0, 0.09, 0));
+    g.add(mesh(rbox(0.7, 0.02, 0.54, 0.01), '#c48a52', 0, 0.185, 0));
+    for (const [x, z, r] of [[-0.12, -0.08, 0.3], [0.08, 0.1, -0.4]]) {
+      const c = mesh(sph(0.15, 14, 8), '#e98f8a', x, 0.21, z);
+      c.scale.set(1.2, 0.16, 0.8);
+      c.rotation.y = r;
+      g.add(c);
+    }
+    const mallet = new THREE.Group();
+    mallet.add(mesh(cyl(0.022, 0.022, 0.32, 8), '#6b4226', 0.0, 0, 0));
+    put(mallet, mesh(rbox(0.1, 0.09, 0.16, 0.02), '#c0c7cf', 0, 0.17, 0)).rotation.x = Math.PI / 2;
+    mallet.position.set(0.26, 0.26, -0.12);
+    mallet.rotation.z = 1.2;
+    g.add(mallet);
+    return {
+      group: g,
+      setState(st, t, active) {
+        mallet.rotation.z = active ? 0.6 + Math.abs(Math.sin(t * 16)) * 0.9 : 1.2;
+        mallet.position.y = active ? 0.34 : 0.26;
+      },
+    };
+  },
+  crumbs() {
+    const g = new THREE.Group();
+    g.add(mesh(rbox(0.78, 0.05, 0.6, 0.02), '#7a4e2c', 0, 0.025, 0));
+    [['#f5f1e8', -0.24], ['#f6c84a', 0], ['#d9a14a', 0.24]].forEach(([fill, x]) => {
+      const b = mesh(dome(0.13), '#f7f4ee', x, 0.17, 0);
+      b.rotation.x = Math.PI;
+      g.add(b);
+      g.add(mesh(cyl(0.12, 0.12, 0.01, 16), fill, x, 0.165, 0));
+    });
+    const fork = mesh(rbox(0.02, 0.01, 0.2, 0.005), '#c0c7cf', 0.0, 0.06, 0.24);
+    fork.rotation.y = 0.4;
+    g.add(fork);
+    return { group: g };
+  },
+  pan() {
+    const g = new THREE.Group();
+    g.add(mesh(rbox(0.72, 0.16, 0.62, 0.04), '#3a3d48', 0, 0.08, 0));
+    put(g, mesh(torus(0.2, 0.03, 18), '#ff7a3c', 0, 0.165, 0)).rotation.x = Math.PI / 2;
+    g.add(mesh(cyl(0.3, 0.27, 0.07, 24), '#26262c', 0, 0.21, 0));
+    g.add(mesh(cyl(0.27, 0.27, 0.01, 24), '#e8b24a', 0, 0.24, 0));
+    put(g, mesh(cyl(0.025, 0.03, 0.34, 8), '#1e1e22', 0.44, 0.23, 0)).rotation.z = Math.PI / 2;
+    const cutlet = mesh(sph(0.16, 14, 8), '#d6953a', 0, 0.255, 0);
+    cutlet.scale.set(1.2, 0.14, 0.85);
+    g.add(cutlet);
+    const sizzle = steamPuffs(6, 0xfff1c0);
+    sizzle.position.set(0, 0.26, 0);
+    g.add(sizzle);
+    return {
+      group: g,
+      setState(st, t, active, servings, prog) {
+        cutlet.visible = active;
+        cutlet.material = mat(active && prog > 0.5 ? '#d6953a' : '#e7d2a2');
+        sizzle.visible = active;
+        sizzle.userData.tick(t * 1.6);
+      },
+    };
+  },
+  schmarrn() {
+    const g = new THREE.Group();
+    g.add(mesh(rbox(0.72, 0.16, 0.62, 0.04), '#3a3d48', 0, 0.08, 0));
+    put(g, mesh(torus(0.2, 0.03, 18), '#ff7a3c', 0, 0.165, 0)).rotation.x = Math.PI / 2;
+    g.add(mesh(cyl(0.3, 0.26, 0.09, 24), '#34343c', 0, 0.22, 0));
+    put(g, mesh(cyl(0.025, 0.03, 0.34, 8), '#1e1e22', -0.44, 0.24, 0)).rotation.z = Math.PI / 2;
+    const pile = new THREE.Group();
+    for (let i = 0; i < 12; i++) {
+      const p = mesh(rbox(0.09, 0.04, 0.07, 0.015), i % 3 ? '#e3a64a' : '#f0c46a', Math.cos(i * 2.4) * (0.06 + (i % 4) * 0.04), 0.27 + (i % 2) * 0.02, Math.sin(i * 2.4) * (0.06 + (i % 4) * 0.04));
+      p.rotation.set(i, i * 1.7, i * 0.5);
+      pile.add(p);
+    }
+    g.add(pile);
+    const sugar = mesh(sph(0.14, 12, 8), '#ffffff', 0, 0.28, 0);
+    sugar.scale.y = 0.15;
+    g.add(sugar);
+    const steam = steamPuffs();
+    steam.position.set(0, 0.32, 0);
+    g.add(steam);
+    const light = statusLight(g, -0.28, 0.08, 0.32);
+    return {
+      group: g,
+      setState(st, t, active, servings) {
+        pile.visible = st !== 'idle';
+        pile.scale.setScalar(st === 'ready' ? 0.6 + 0.4 * ((servings || 0) / 3) : 0.8);
+        sugar.visible = st === 'ready';
+        steam.visible = st === 'cooking';
+        steam.userData.tick(t);
+        light.material.color.setHex(LIGHT[st]);
+      },
+    };
+  },
+  beertap() {
+    const g = new THREE.Group();
+    g.add(mesh(rbox(0.6, 0.05, 0.42, 0.02), '#c0c7cf', 0, 0.025, 0.04));
+    g.add(mesh(rbox(0.52, 0.02, 0.34, 0.01), '#7a828c', 0, 0.055, 0.04));
+    g.add(mesh(cyl(0.05, 0.06, 0.6, 12), '#d7dde2', 0, 0.3, -0.14));
+    put(g, mesh(cyl(0.045, 0.045, 0.34, 12), '#d7dde2', 0, 0.6, -0.04)).rotation.x = Math.PI / 2;
+    g.add(mesh(cyl(0.025, 0.02, 0.1, 8), '#d7dde2', 0, 0.54, 0.11));
+    const handle = new THREE.Group();
+    handle.position.set(0, 0.64, 0.11);
+    handle.add(mesh(cyl(0.022, 0.03, 0.26, 8), '#1e1e22', 0, 0.13, 0));
+    const badge = canvasTexture(64, 64, (c) => {
+      c.fillStyle = '#c8102e';
+      c.fillRect(0, 0, 64, 64);
+      c.fillStyle = '#ffffff';
+      c.fillRect(0, 22, 64, 20);
+    });
+    const plate = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.1, 0.02), [mat('#c8102e'), mat('#c8102e'), mat('#c8102e'), mat('#c8102e'), texMat(badge), mat('#c8102e')]);
+    plate.position.set(0, 0.22, 0.035);
+    handle.add(plate);
+    g.add(handle);
+    const mug = buildDish('beer');
+    mug.position.set(0, 0.06, 0.11);
+    mug.scale.setScalar(1.25);
+    g.add(mug);
+    const stream = new THREE.Mesh(cyl(0.012, 0.012, 0.2, 8), new THREE.MeshBasicMaterial({ color: 0xf2b632, transparent: true, opacity: 0.85 }));
+    stream.position.set(0, 0.38, 0.11);
+    g.add(stream);
+    return {
+      group: g,
+      setState(st, t, active) {
+        stream.visible = active;
+        handle.rotation.x = active ? 0.5 : 0;
+      },
+    };
+  },
+  sacher() {
+    const g = new THREE.Group();
+    g.add(mesh(cyl(0.12, 0.18, 0.05, 18), '#c0c7cf', 0, 0.025, 0));
+    g.add(mesh(cyl(0.035, 0.035, 0.18, 10), '#c0c7cf', 0, 0.13, 0));
+    g.add(mesh(cyl(0.34, 0.34, 0.03, 24), '#f2f4f6', 0, 0.23, 0));
+    const part = (r, h, y, color) => {
+      const m = new THREE.Mesh(new THREE.CylinderGeometry(r, r, h, 28, 1, false, Math.PI / 4, (7 * Math.PI) / 4), mat(color));
+      m.position.y = y;
+      m.castShadow = true;
+      g.add(m);
+    };
+    part(0.27, 0.1, 0.3, '#5a3220');
+    part(0.27, 0.025, 0.365, '#f0a030');
+    part(0.27, 0.1, 0.43, '#5a3220');
+    part(0.278, 0.03, 0.49, '#2a140a');
+    const script = mesh(rbox(0.12, 0.006, 0.04, 0.004), '#3a1e10', -0.02, 0.51, 0.05);
+    script.rotation.y = 0.3;
+    g.add(script);
+    return { group: g };
+  },
+  cream() {
+    const g = new THREE.Group();
+    const bowlM = mesh(dome(0.2), '#e8eef2', 0, 0.2, 0);
+    bowlM.rotation.x = Math.PI;
+    g.add(bowlM);
+    const top = mesh(sph(0.19, 16, 10), '#fffaf2', 0, 0.2, 0);
+    top.scale.y = 0.45;
+    g.add(top);
+    g.add(mesh(cone(0.06, 0.12, 10), '#fffaf2', 0.02, 0.3, 0));
+    const whisk = new THREE.Group();
+    whisk.add(mesh(cyl(0.015, 0.015, 0.22, 8), '#6b4226', 0, 0.11, 0));
+    for (let i = 0; i < 3; i++) {
+      const loop = mesh(torus(0.05, 0.006, 8, 14), '#c0c7cf', 0, 0.27, 0);
+      loop.rotation.y = (i * Math.PI) / 3;
+      loop.scale.y = 1.6;
+      whisk.add(loop);
+    }
+    whisk.position.set(0.26, 0.05, 0.1);
+    whisk.rotation.z = -0.5;
+    g.add(whisk);
+    return { group: g };
+  },
   slot() {
     const g = new THREE.Group();
     g.add(mesh(rbox(0.86, 0.06, 0.66, 0.04), '#d23a32', 0, 0.03, 0));
