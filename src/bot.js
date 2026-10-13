@@ -218,6 +218,6 @@ export class Bot {
     }
 
     this.pending = null;
-    return { target: { type: 'seat', seat: j.seat }, ip: j.seat.ip, look: { x: j.seat.x, z: KITCHEN.backZ }, verb: 'press' };
+    return { target: { type: 'seat', seat: j.seat }, ip: j.seat.ip, look: { x: j.seat.x, z: KITCHEN.counterZ }, verb: 'press' };
   }
 }

@@ -8,6 +8,10 @@ import { sfx } from './audio.js';
 import { seededRng } from './net.js';
 
 export const PLAYER_COLORS = ['#41f06c', '#3fd8f3', '#ffb03d', '#ff5fd2'];
+export const TEAM_COLORS = [
+  ['#ff5246', '#ffa23c'],
+  ['#3fd8f3', '#5cf0b4'],
+];
 const REACH = 1.05;
 const SPEED = 4.4;
 const tmp = new THREE.Vector3();
@@ -67,7 +71,13 @@ export class Game {
     this.setupScene();
     this.setupSeats();
     this.setupStations();
-    this.players = players.map((p, i) => this.makePlayer(p, i, players.length));
+    this.crew = Math.max(1, players.length);
+    const teamCount = [0, 0];
+    this.players = players.map((p, i) => {
+      const team = mode.id === 'versus' ? (p.team ?? i % 2) : 0;
+      const color = mode.id === 'versus' ? TEAM_COLORS[team][teamCount[team]++ % 2] : PLAYER_COLORS[i % 4];
+      return this.makePlayer({ ...p, team, color }, i, players.length);
+    });
   }
 
   setupScene() {
@@ -136,7 +146,7 @@ export class Game {
     const label = el('target-label hidden', '', this.overlay);
     label.style.setProperty('--c', color);
     const p = {
-      idx: i, name: cfg.name, charId: cfg.charId, color, ctrl: cfg.controller, bot: null, isBot: !!cfg.bot,
+      idx: i, name: cfg.name, charId: cfg.charId, color, team: cfg.team || 0, ctrl: cfg.controller, bot: null, isBot: !!cfg.bot,
       remote: !!cfg.remote, puppet: !!cfg.puppet, netId: cfg.netId, local: !cfg.remote && !cfg.puppet && !cfg.bot, lastQ: 0, gone: false, net: null, netIn: null,
       root, rig, ring, arrow, tag, label, labelKey: '',
       pos: root.position, vel: new THREE.Vector2(), facing: Math.PI,
@@ -165,6 +175,10 @@ export class Game {
       this.scene.fog.near = dist + 3;
       this.scene.fog.far = dist + 16;
     }
+  }
+
+  teamMoney(team) {
+    return this.players.reduce((s, p) => s + (p.team === team ? p.money : 0), 0);
   }
 
   get totalMoney() {
@@ -258,7 +272,7 @@ export class Game {
       served: this.served,
       lost: this.lost,
       elapsed: this.elapsed,
-      players: this.players.map((p) => ({ name: p.name, money: p.money, served: p.served, charId: p.charId, color: p.color, isBot: p.isBot })),
+      players: this.players.map((p) => ({ name: p.name, money: p.money, served: p.served, charId: p.charId, color: p.color, isBot: p.isBot, team: p.team })),
     };
     this.showCount(this.mode.duration ? "Time's up!" : 'Closed!', 'go');
     this.emit({ k: 'end', r: result });
@@ -273,7 +287,7 @@ export class Game {
     p.pos.x = THREE.MathUtils.clamp(p.pos.x + p.vel.x * dt, KITCHEN.minX, KITCHEN.maxX);
     p.pos.z = THREE.MathUtils.clamp(p.pos.z + p.vel.y * dt, KITCHEN.minZ, KITCHEN.maxZ);
     if (Math.hypot(input.x, input.z) > 0.2) p.facing = angleLerp(p.facing, Math.atan2(input.x, input.z), Math.min(1, dt * 16));
-    else if (p.faceTo != null) p.facing = angleLerp(p.facing, p.faceTo, Math.min(1, dt * 16));
+    else if (Number.isFinite(p.faceTo)) p.facing = angleLerp(p.facing, p.faceTo, Math.min(1, dt * 16));
     p.root.rotation.y = p.facing;
   }
 
@@ -511,7 +525,7 @@ export class Game {
           this.scene.remove(parked.model);
           p.tray = parked.tray;
           p.trayModel = parked.model;
-          p.trayModel.position.set(0, 1.0, 0.5);
+          p.trayModel.position.set(0, 0.93, 0.44);
           p.trayModel.rotation.set(0, 0, 0);
           p.trayModel.scale.setScalar(1);
           p.rig.body.add(p.trayModel);
@@ -533,7 +547,7 @@ export class Game {
   giveTray(p) {
     p.tray = { items: [], rev: 0 };
     p.trayModel = buildTray();
-    p.trayModel.position.set(0, 1.0, 0.5);
+    p.trayModel.position.set(0, 0.93, 0.44);
     p.rig.body.add(p.trayModel);
   }
 
@@ -667,7 +681,7 @@ export class Game {
     }
     const total = order.reduce((s, id) => s + this.level.menu[id].price, 0);
     const side = seat.x <= 0 ? -1 : 1;
-    const base = this.mode.id === 'score' ? Math.max(24, 44 - this.elapsed * 0.07) : 38;
+    const base = (this.mode.id === 'score' ? Math.max(24, 44 - this.elapsed * 0.07) : 38) * (1 - 0.05 * (this.crew - 1));
     const maxPatience = base + (n - 1) * 13;
     const c = this.makeCustomer(seat, ++this.uid, Math.floor(Math.random() * 2 ** 31), side * 9, KITCHEN.customerZ - 1.0);
     Object.assign(c, {
@@ -723,7 +737,7 @@ export class Game {
             this.scene.remove(c.root);
             c.bubble.remove();
             seat.customer = null;
-            const base = this.mode.id === 'score' ? Math.max(1.2, 5 - this.elapsed * 0.022) : 1.4;
+            const base = (this.mode.id === 'score' ? Math.max(1.2, 5 - this.elapsed * 0.022) : 1.4) / (1 + 0.3 * (this.crew - 1));
             seat.cooldown = base + rand(0, 2.5);
             continue;
           }

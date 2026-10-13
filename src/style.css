@@ -625,82 +625,98 @@ body:not(.in-lobby) .lobby-bg {
   justify-content: center;
 }
 
-.p2slot {
+#lobby > .local-slots {
   position: absolute;
-  right: 9%;
-  top: 30%;
-  width: 180px;
-  height: 52%;
+  inset: 0;
+  pointer-events: none;
+}
+
+.lslot {
+  position: absolute;
+  transform: translateX(-50%);
+  pointer-events: auto;
   display: flex;
   flex-direction: column;
   align-items: center;
+  gap: 5px;
+  text-align: center;
+}
+
+.lslot.join {
+  transform: translate(-50%, -100%);
+  height: 42vh;
+  max-height: 320px;
   justify-content: flex-end;
+  opacity: 0.8;
+  transition: opacity 0.2s;
 }
 
-.p2slot .join {
-  width: 100%;
-  height: 100%;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  opacity: 0.85;
-  transition:
-    opacity 0.2s,
-    transform 0.2s;
-}
-
-.p2slot .join:hover {
+.lslot.join:hover {
   opacity: 1;
-  transform: scale(1.03);
 }
 
-.p2slot .join svg {
-  height: 85%;
+.lslot.join svg {
+  height: 80%;
   filter: drop-shadow(0 0 10px rgba(255, 255, 255, 0.15));
 }
 
-.p2slot .join span {
+.lslot.join span {
   font-family: var(--display);
   font-size: 15px;
-  opacity: 0.8;
-  margin-top: 6px;
 }
 
-.p2ui {
-  text-align: center;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 6px;
-  margin-bottom: -30px;
+.lslot.join small {
+  font-size: 11px;
+  font-weight: 600;
+  opacity: 0.75;
 }
 
-.p2tag {
+.ltag {
   font-family: var(--display);
-  font-size: 20px;
-  -webkit-text-stroke: 5px #0b3a6a;
+  font-size: 17px;
+  color: #fff;
+  -webkit-text-stroke: 4px var(--c);
   paint-order: stroke fill;
+  white-space: nowrap;
 }
 
-.p2ui .arrows {
+.lslot .arrows {
   display: flex;
-  gap: 70px;
+  gap: 44px;
 }
 
-.p2ui .leave {
-  font-size: 13px;
+.lslot .pill,
+.p1ctl {
+  font-size: 12px;
+}
+
+.p1ctl {
+  margin-bottom: 8px;
+}
+
+.lslot .leave {
+  font-size: 12px;
   font-weight: 600;
   background: rgba(0, 0, 0, 0.4);
-  padding: 3px 12px;
+  padding: 2px 10px;
   border-radius: 999px;
 }
 
-.p2ui .keys {
-  font-size: 12px;
-  opacity: 0.75;
-  font-weight: 600;
-  white-space: nowrap;
+.vsbar .pics {
+  display: flex;
+}
+
+.vsbar .pics img + img {
+  margin-left: -20px;
+}
+
+.vs-side {
+  flex-direction: row;
+}
+
+.vs-side img {
+  flex: 1;
+  min-width: 0;
 }
 
 /* ---------- stage select ---------- */
@@ -951,7 +967,7 @@ body.in-lobby #vignette {
 }
 
 #hud.versus .vs-side {
-  display: block;
+  display: flex;
 }
 
 @media (max-width: 1000px) {
@@ -2143,7 +2159,7 @@ kbd {
     font-size: 30px;
   }
   .unlocks,
-  .p2slot,
+  .local-slots,
   .who {
     display: none;
   }
@@ -2286,4 +2302,40 @@ kbd {
   .corner .btn {
     font-size: 16px;
   }
+}
+
+/* ---------- 4 players ---------- */
+
+.stage-players.many {
+  height: min(22vh, 190px);
+}
+
+.stage-players.many .sp {
+  width: min(18vh, 160px);
+}
+
+.team-tag {
+  margin-top: 4px;
+  font-family: var(--display);
+  font-size: 12px;
+  color: #fff;
+  padding: 1px 10px;
+  border-radius: 999px;
+}
+
+.team-tag.red {
+  background: #e2453c;
+}
+
+.team-tag.teal {
+  background: #2fb7ad;
+}
+
+.versus-result .pl .pics {
+  display: flex;
+  justify-content: center;
+}
+
+.versus-result .pl .pics img + img {
+  margin-left: -28px;
 }

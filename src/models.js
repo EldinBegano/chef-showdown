@@ -77,36 +77,237 @@ export function texMat(tex, extra = {}) {
   return new THREE.MeshToonMaterial({ map: tex, gradientMap: toneMap, ...extra });
 }
 
-function humanoid({ skin, shirt, pants, shoes = '#2b2b33', sleeves, scale = 1 }) {
+const capsule = (r, len) => cached(`cap${r},${len}`, () => new THREE.CapsuleGeometry(r, len, 4, 12));
+
+const TORSO_PROFILE = [0.215, 0.232, 0.238, 0.236, 0.24, 0.25, 0.262, 0.27, 0.268, 0.255, 0.225, 0.17, 0.09, 0.02];
+const BULK_PROFILE = [0.22, 0.235, 0.24, 0.245, 0.27, 0.31, 0.35, 0.38, 0.39, 0.375, 0.33, 0.25, 0.12, 0.02];
+const torsoGeo = (profile, key) =>
+  cached(key, () => {
+    const n = profile.length;
+    const pts = profile.map((r, i) => new THREE.Vector2(r, 0.57 + (0.64 * i) / (n - 1)));
+    return new THREE.LatheGeometry(pts, 28, Math.PI);
+  });
+
+const outfitCache = new Map();
+function outfitMaterial(key, draw) {
+  if (outfitCache.has(key)) return outfitCache.get(key);
+  const tex = canvasTexture(512, 256, draw);
+  const m = texMat(tex);
+  outfitCache.set(key, m);
+  return m;
+}
+
+const OUTFITS = {
+  plain: (color) => (c, w, h) => {
+    c.fillStyle = color;
+    c.fillRect(0, 0, w, h);
+    c.fillStyle = 'rgba(0,0,0,0.12)';
+    c.fillRect(0, 0, w, 22);
+  },
+  striped: (color, stripe) => (c, w, h) => {
+    c.fillStyle = color;
+    c.fillRect(0, 0, w, h);
+    c.fillStyle = stripe;
+    for (let y = 40; y < h; y += 44) c.fillRect(0, y, w, 16);
+    c.fillStyle = 'rgba(0,0,0,0.12)';
+    c.fillRect(0, 0, w, 22);
+  },
+  chef: (coat, buttons, apron) => (c, w, h) => {
+    c.fillStyle = coat;
+    c.fillRect(0, 0, w, h);
+    c.fillStyle = 'rgba(0,0,0,0.08)';
+    c.fillRect(0, 0, w, 26);
+    c.strokeStyle = 'rgba(0,0,0,0.12)';
+    c.lineWidth = 3;
+    c.beginPath();
+    c.moveTo(w / 2 + 34, 26);
+    c.lineTo(w / 2 + 34, h);
+    c.stroke();
+    if (apron) {
+      c.fillStyle = apron;
+      c.fillRect(0, 150, w, 14);
+      c.beginPath();
+      c.roundRect(w / 2 - 118, 150, 236, h - 150, 10);
+      c.fill();
+      c.fillStyle = 'rgba(255,255,255,0.25)';
+      c.fillRect(w / 2 - 118, h - 14, 236, 4);
+    }
+    c.fillStyle = buttons;
+    for (const y of apron ? [60, 105] : [60, 105, 150, 195]) for (const x of [w / 2 - 24, w / 2 + 24]) {
+      c.beginPath();
+      c.arc(x, y, 8, 0, Math.PI * 2);
+      c.fill();
+    }
+  },
+  jacket: (jacket, left, right) => (c, w, h) => {
+    c.fillStyle = jacket;
+    c.fillRect(0, 0, w, h);
+    c.fillStyle = left;
+    c.fillRect(w / 2 - 56, 18, 56, h);
+    c.fillStyle = right;
+    c.fillRect(w / 2, 18, 56, h);
+    c.fillStyle = 'rgba(0,0,0,0.18)';
+    c.fillRect(w / 2 - 62, 18, 8, h);
+    c.fillRect(w / 2 + 54, 18, 8, h);
+    for (const x of [w / 2 - 150, w / 2 + 100]) c.fillRect(x, 170, 50, 36);
+    c.fillStyle = 'rgba(255,255,255,0.12)';
+    c.fillRect(0, 0, w, 16);
+  },
+  vest: (vest, shirt, accent) => (c, w, h) => {
+    c.fillStyle = vest;
+    c.fillRect(0, 0, w, h);
+    c.fillStyle = shirt;
+    c.beginPath();
+    c.moveTo(w / 2 - 60, 0);
+    c.lineTo(w / 2 + 60, 0);
+    c.lineTo(w / 2 + 14, h);
+    c.lineTo(w / 2 - 14, h);
+    c.fill();
+    c.fillStyle = accent;
+    c.fillRect(w / 2 - 4, 30, 8, h);
+  },
+  stringer: (skin, tank, emblem) => (c, w, h) => {
+    c.fillStyle = skin;
+    c.fillRect(0, 0, w, h);
+    c.strokeStyle = 'rgba(90,40,10,0.35)';
+    c.lineWidth = 4;
+    for (const dir of [-1, 1]) {
+      c.beginPath();
+      c.moveTo(w / 2, 40);
+      c.quadraticCurveTo(w / 2 + dir * 70, 95, w / 2 + dir * 110, 60);
+      c.stroke();
+    }
+    c.fillStyle = tank;
+    const tankAt = (cx, half) => {
+      c.beginPath();
+      c.moveTo(cx - 34, 0);
+      c.lineTo(cx - 14, 0);
+      c.quadraticCurveTo(cx - 10, 70, cx - half * 0.45, 95);
+      c.lineTo(cx + half * 0.45, 95);
+      c.quadraticCurveTo(cx + 10, 70, cx + 14, 0);
+      c.lineTo(cx + 34, 0);
+      c.lineTo(cx + half, 120);
+      c.lineTo(cx + half, h);
+      c.lineTo(cx - half, h);
+      c.lineTo(cx - half, 120);
+      c.closePath();
+      c.fill();
+    };
+    tankAt(w / 2, 104);
+    tankAt(0, 104);
+    tankAt(w, 104);
+    c.fillStyle = emblem;
+    c.beginPath();
+    c.arc(w / 2, 170, 34, 0, Math.PI * 2);
+    c.fill();
+    c.fillStyle = tank;
+    c.fillRect(w / 2 - 22, 166, 44, 8);
+    c.fillRect(w / 2 - 26, 154, 8, 32);
+    c.fillRect(w / 2 + 18, 154, 8, 32);
+  },
+  italian: (coat, gold, line) => (c, w, h) => {
+    c.fillStyle = coat;
+    c.fillRect(0, 0, w, h);
+    c.fillStyle = 'rgba(0,0,0,0.07)';
+    c.fillRect(0, 0, w, 24);
+    c.fillStyle = gold;
+    for (const y of [50, 88]) for (const x of [w / 2 - 22, w / 2 + 22]) {
+      c.beginPath();
+      c.arc(x, y, 6, 0, Math.PI * 2);
+      c.fill();
+    }
+    c.fillStyle = '#ffffff';
+    c.fillRect(0, 132, w, 50);
+    c.strokeStyle = line;
+    c.lineWidth = 3;
+    for (const y of [132, 146, 160, 174, 182]) {
+      c.beginPath();
+      c.moveTo(0, y);
+      c.lineTo(w, y);
+      c.stroke();
+    }
+    c.beginPath();
+    c.moveTo(w / 2 - 130, 182);
+    c.lineTo(w / 2 - 136, h);
+    c.moveTo(w / 2 + 130, 182);
+    c.lineTo(w / 2 + 136, h);
+    c.stroke();
+  },
+  tunic: (color, belt) => (c, w, h) => {
+    c.fillStyle = color;
+    c.fillRect(0, 0, w, h);
+    c.fillStyle = belt;
+    c.fillRect(0, 168, w, 22);
+    c.fillStyle = 'rgba(255,255,255,0.18)';
+    c.beginPath();
+    c.moveTo(w / 2 - 40, 0);
+    c.lineTo(w / 2, 60);
+    c.lineTo(w / 2 + 40, 0);
+    c.fill();
+  },
+};
+
+function humanoid({ skin, outfit, outfitKey, pants, shoes = '#2b2b33', sleeves, forearms = sleeves, scale = 1, bulk = false, bareLegs = false }) {
   const root = new THREE.Group();
   const body = new THREE.Group();
   root.add(body);
+  const B = bulk
+    ? { shoulderX: 0.4, shoulderY: 1.08, delt: 0.14, upper: 0.105, fore: 0.088, hand: 0.085, leg: 0.105, hipX: 0.13, pelvis: 0.5, neck: 0.12 }
+    : { shoulderX: 0.27, shoulderY: 1.07, delt: 0.075, upper: 0.066, fore: 0.058, hand: 0.068, leg: 0.085, hipX: 0.11, pelvis: 0.44, neck: 0.075 };
 
-  const limb = (x, y, r, len, color, endGeo, endColor, endY) => {
-    const pivot = new THREE.Group();
-    pivot.position.set(x, y, 0);
-    pivot.add(mesh(cyl(r, r * 0.9, len, 12), color, 0, -len / 2, 0));
-    if (endGeo) pivot.add(mesh(endGeo, endColor, 0, endY, 0.04));
-    body.add(pivot);
-    return pivot;
+  const torso = new THREE.Mesh(bulk ? torsoGeo(BULK_PROFILE, 'torsoBulk') : torsoGeo(TORSO_PROFILE, 'torso'), outfitMaterial(outfitKey, outfit));
+  torso.scale.z = bulk ? 0.62 : 0.7;
+  torso.castShadow = true;
+  torso.receiveShadow = true;
+  body.add(torso);
+  body.add(mesh(rbox(B.pelvis, 0.16, 0.34, 0.07), pants, 0, 0.6, 0));
+  body.add(mesh(cyl(B.neck, B.neck * 1.25, 0.12, 12), skin, 0, 1.24, 0));
+
+  const leg = (x) => {
+    const hip = new THREE.Group();
+    hip.position.set(x, 0.6, 0);
+    if (bareLegs) {
+      hip.add(mesh(capsule(0.14, 0.04), pants, 0, -0.05, 0));
+      hip.add(mesh(capsule(0.125, 0.14), skin, 0, -0.17, 0.01));
+      hip.add(mesh(capsule(0.092, 0.12), skin, 0, -0.38, -0.01));
+    } else hip.add(mesh(capsule(B.leg, 0.3), pants, 0, -0.24, 0));
+    hip.add(mesh(rbox(0.17 + (bulk ? 0.03 : 0), 0.1, 0.27, 0.045), shoes, 0, -0.55, 0.04));
+    body.add(hip);
+    return hip;
+  };
+  const arm = (side) => {
+    const shoulder = new THREE.Group();
+    shoulder.rotation.order = 'YXZ';
+    shoulder.position.set(side * B.shoulderX, B.shoulderY, 0);
+    shoulder.add(mesh(sph(B.delt, 14, 10), sleeves, 0, 0, 0));
+    shoulder.add(mesh(capsule(B.upper, 0.16), sleeves, 0, -0.13, 0));
+    if (bulk) {
+      const bicep = mesh(sph(B.upper * 1.05, 12, 10), sleeves, 0, -0.14, 0.05);
+      bicep.scale.set(1, 1.3, 1);
+      shoulder.add(bicep);
+    }
+    const elbow = new THREE.Group();
+    elbow.rotation.order = 'YXZ';
+    elbow.position.y = -0.26;
+    elbow.add(mesh(capsule(B.fore, 0.13), forearms, 0, -0.1, 0));
+    elbow.add(mesh(sph(B.hand, 12, 10), skin, 0, -0.24, 0));
+    shoulder.add(elbow);
+    body.add(shoulder);
+    return { shoulder, elbow };
   };
 
-  const legL = limb(-0.12, 0.6, 0.09, 0.5, pants, rbox(0.17, 0.11, 0.27, 0.05), shoes, -0.53);
-  const legR = limb(0.12, 0.6, 0.09, 0.5, pants, rbox(0.17, 0.11, 0.27, 0.05), shoes, -0.53);
-  const torso = mesh(rbox(0.52, 0.56, 0.34, 0.14), shirt, 0, 0.88, 0);
-  body.add(torso);
-  const armL = limb(-0.32, 1.08, 0.068, 0.42, sleeves || shirt, sph(0.075), skin, -0.44);
-  const armR = limb(0.32, 1.08, 0.068, 0.42, sleeves || shirt, sph(0.075), skin, -0.44);
-  armL.children[1].position.z = 0;
-  armR.children[1].position.z = 0;
+  const legL = leg(-B.hipX);
+  const legR = leg(B.hipX);
+  const L = arm(-1);
+  const R = arm(1);
 
   const head = new THREE.Group();
-  head.position.y = 1.4;
+  head.position.y = 1.42;
   head.add(mesh(sph(0.27), skin));
   body.add(head);
 
   root.scale.setScalar(scale);
-  return { root, rig: { body, head, torso, legL, legR, armL, armR, phase: Math.random() * 6 } };
+  return { root, rig: { body, head, torso, legL, legR, armL: L.shoulder, armR: R.shoulder, elbowL: L.elbow, elbowR: R.elbow, phase: Math.random() * 6, bulk, B } };
 }
 
 function eyes(head, { color = '#1a1a1a', y = 0.03, z = 0.245, gap = 0.09, r = 0.036 } = {}) {
@@ -136,11 +337,6 @@ function mushroomCap(head, capColor, spotColor) {
   ]);
 }
 
-function chefCoat(body, color = '#f4efe3', buttons = '#c8b89a') {
-  for (const [x, y] of [[-0.08, 0.98], [0.08, 0.98], [-0.08, 0.8], [0.08, 0.8]]) body.add(mesh(sph(0.025, 8, 6), buttons, x, y, 0.17));
-  body.add(mesh(rbox(0.4, 0.36, 0.04, 0.02), color, 0, 0.62, 0.15));
-}
-
 function raccoonHead(head, fur = '#8e8e98') {
   head.children[0].material = mat(fur);
   for (const x of [-0.095, 0.095]) {
@@ -164,8 +360,8 @@ function raccoonHead(head, fur = '#8e8e98') {
 
 function raccoonTail(body, fur = '#8e8e98') {
   const tail = new THREE.Group();
-  tail.position.set(0, 0.62, -0.18);
-  tail.rotation.x = -0.9;
+  tail.position.set(0, 0.64, -0.16);
+  tail.rotation.x = 1.15;
   for (let i = 0; i < 5; i++) tail.add(mesh(cyl(0.09 - i * 0.008, 0.1 - i * 0.008, 0.11, 12), i % 2 ? '#2a2a32' : fur, 0, -0.06 - i * 0.11, 0));
   body.add(tail);
 }
@@ -188,8 +384,7 @@ export const CHARACTERS = [
   {
     id: 'morel', name: 'Chef Morel', level: 1, tier: 'free',
     build() {
-      const h = humanoid({ skin: '#e6b48c', shirt: '#f4efe3', pants: '#557d3a', shoes: '#5b3a24' });
-      chefCoat(h.rig.body);
+      const h = humanoid({ skin: '#e6b48c', outfitKey: 'morel', outfit: OUTFITS.chef('#f4efe3', '#c8b89a'), sleeves: '#f4efe3', pants: '#557d3a', shoes: '#5b3a24' });
       eyes(h.rig.head);
       mustache(h.rig.head);
       mushroomCap(h.rig.head, '#d83a2c', '#fff7ee');
@@ -199,9 +394,7 @@ export const CHARACTERS = [
   {
     id: 'rocco', name: 'Rocco', level: 1, tier: 'free',
     build() {
-      const h = humanoid({ skin: '#8e8e98', shirt: '#4e7e3f', pants: '#222228', shoes: '#ececec' });
-      h.rig.body.add(mesh(rbox(0.3, 0.5, 0.06, 0.03), '#e5559a', -0.08, 0.86, 0.15));
-      h.rig.body.add(mesh(rbox(0.22, 0.5, 0.06, 0.03), '#3fb3a8', 0.12, 0.86, 0.15));
+      const h = humanoid({ skin: '#8e8e98', outfitKey: 'rocco', outfit: OUTFITS.jacket('#4e7e3f', '#e5559a', '#3fb3a8'), sleeves: '#4e7e3f', pants: '#222228', shoes: '#ececec' });
       raccoonHead(h.rig.head);
       raccoonTail(h.rig.body);
       bucketHat(h.rig.head, '#ef7a1a');
@@ -211,9 +404,8 @@ export const CHARACTERS = [
   {
     id: 'violet', name: 'Violet', level: 2, tier: 'free',
     build() {
-      const h = humanoid({ skin: '#9b6fc4', shirt: '#f6f1e6', pants: '#7d4fa8', shoes: '#4b2a1a' });
-      h.rig.body.add(mesh(rbox(0.46, 0.36, 0.05, 0.02), '#f07d1e', 0, 0.68, 0.16));
-      put(h.rig.body, mesh(torus(0.17, 0.05, 20), '#f07d1e', 0, 1.15, 0)).rotation.x = Math.PI / 2;
+      const h = humanoid({ skin: '#9b6fc4', outfitKey: 'violet', outfit: OUTFITS.chef('#f6f1e6', '#c8b89a', '#f07d1e'), sleeves: '#f6f1e6', pants: '#7d4fa8', shoes: '#4b2a1a' });
+      put(h.rig.body, mesh(torus(0.12, 0.045, 20), '#f07d1e', 0, 1.2, 0.02)).rotation.x = Math.PI / 2;
       eyes(h.rig.head, { y: 0.0 });
       mushroomCap(h.rig.head, '#b58ade', '#efe1fb');
       return h;
@@ -222,8 +414,7 @@ export const CHARACTERS = [
   {
     id: 'sprinkles', name: 'Sprinkles', level: 3, tier: 'free',
     build() {
-      const h = humanoid({ skin: '#f3c9a6', shirt: '#f4efe3', pants: '#ef7a2a', shoes: '#1e1e1e', sleeves: '#f4efe3' });
-      chefCoat(h.rig.body);
+      const h = humanoid({ skin: '#f3c9a6', outfitKey: 'sprinkles', outfit: OUTFITS.chef('#f4efe3', '#e5559a'), sleeves: '#f4efe3', pants: '#ef7a2a', shoes: '#1e1e1e' });
       const head = h.rig.head;
       const hair = mesh(sph(0.295), '#e0682a', 0, 0.02, -0.035);
       head.add(hair);
@@ -254,14 +445,109 @@ export const CHARACTERS = [
     },
   },
   {
+    id: 'pump', name: 'Mr. Second Place', level: 1, tier: 'gold',
+    build() {
+      const tan = '#b57440';
+      const blue = '#2350d8';
+      const h = humanoid({ skin: tan, outfitKey: 'pump2', outfit: OUTFITS.stringer(tan, blue, '#ffffff'), sleeves: tan, pants: blue, shoes: '#f2f2f2', bulk: true, bareLegs: true });
+      const { head, body, elbowL, elbowR, B } = h.rig;
+      head.scale.setScalar(0.88);
+      head.position.y = 1.4;
+      head.children[0].scale.set(0.9, 1.1, 0.95);
+      head.add(mesh(rbox(0.3, 0.15, 0.25, 0.07), tan, 0, -0.15, 0.04));
+      for (const x of [-0.245, 0.245]) {
+        const ear = mesh(sph(0.055, 10, 8), tan, x, 0.0, -0.01);
+        ear.scale.set(0.55, 1, 0.8);
+        head.add(ear);
+      }
+      const cap = mesh(dome(0.282), '#1e140e', 0, 0.03, -0.02);
+      cap.scale.set(0.93, 1.06, 0.99);
+      cap.rotation.x = -0.32;
+      head.add(cap);
+      for (let i = 0; i < 18; i++) {
+        const a = i * 2.39996;
+        const r = 0.03 + (i / 18) * 0.15;
+        const curl = mesh(sph(0.04, 8, 6), '#2a1c12', Math.cos(a) * r, 0.315 - r * r * 2.2, Math.sin(a) * r - 0.01);
+        curl.scale.y = 0.65;
+        head.add(curl);
+      }
+      for (const x of [-0.085, 0.085]) {
+        const white = mesh(sph(0.036, 10, 8), '#f6efe4', x, 0.025, 0.232);
+        white.scale.set(1.25, 0.62, 0.6);
+        head.add(white);
+        head.add(mesh(sph(0.019, 8, 6), '#2a1608', x, 0.025, 0.25));
+        const brow = mesh(rbox(0.1, 0.026, 0.035, 0.01), '#1e140e', x, 0.075, 0.24);
+        brow.rotation.z = x < 0 ? -0.18 : 0.18;
+        head.add(brow);
+      }
+      const nose = mesh(sph(0.038, 10, 8), '#a5663a', 0, -0.035, 0.265);
+      nose.scale.set(1.15, 0.85, 0.9);
+      head.add(nose);
+      head.add(mesh(rbox(0.13, 0.04, 0.02, 0.012), '#6e3a1e', 0, -0.115, 0.248));
+      head.add(mesh(rbox(0.11, 0.022, 0.022, 0.008), '#fdf8ee', 0, -0.113, 0.252));
+      for (const elbow of [elbowL, elbowR]) elbow.add(mesh(cyl(B.fore * 1.18, B.fore * 1.18, 0.07, 14), '#ffffff', 0, -0.17, 0));
+      h.rig.idle = 'flex';
+      return h;
+    },
+  },
+  {
+    id: 'bianco', name: 'Tonio', level: 1, tier: 'gold',
+    build() {
+      const skin = '#f2c9a2';
+      const h = humanoid({ skin, outfitKey: 'bianco', outfit: OUTFITS.italian('#f4f2ee', '#d4af37', '#cfcac0'), sleeves: '#f4f2ee', forearms: skin, pants: '#f4f2ee', shoes: '#3a2a20', scale: 1.04 });
+      const head = h.rig.head;
+      head.children[0].scale.set(0.92, 1.06, 0.95);
+      const hair = mesh(dome(0.28), '#b98a4e', 0, 0.05, -0.04);
+      hair.rotation.x = -0.35;
+      head.add(hair);
+      for (const x of [-0.2, 0.2]) {
+        const side = mesh(sph(0.1, 10, 8), '#b98a4e', x, 0.06, 0.02);
+        side.scale.set(0.5, 1.1, 1.1);
+        head.add(side);
+      }
+      const toque = new THREE.Group();
+      toque.position.y = 0.2;
+      toque.add(mesh(cyl(0.23, 0.215, 0.13, 24), '#ece8df', 0, 0.06, 0));
+      toque.add(mesh(cyl(0.21, 0.225, 0.42, 24), '#fbfaf6', 0, 0.33, 0));
+      const puff = mesh(sph(0.22, 18, 10), '#fbfaf6', 0, 0.53, 0);
+      puff.scale.y = 0.35;
+      toque.add(puff);
+      toque.add(mesh(rbox(0.08, 0.08, 0.03, 0.01), '#d4af37', 0, 0.06, 0.225));
+      toque.add(mesh(rbox(0.02, 0.06, 0.035, 0.005), '#b8901f', 0, 0.06, 0.232));
+      head.add(toque);
+      for (const x of [-0.085, 0.085]) {
+        head.add(mesh(sph(0.04, 10, 8), '#ffffff', x, 0.02, 0.235));
+        head.add(mesh(sph(0.024, 8, 6), '#4a7fa0', x, 0.02, 0.27));
+        const brow = mesh(rbox(0.1, 0.022, 0.03, 0.01), '#8a6236', x, 0.085, 0.245);
+        brow.rotation.z = x < 0 ? 0.12 : -0.12;
+        head.add(brow);
+      }
+      head.add(mesh(sph(0.03, 8, 6), '#e0a882', 0, -0.03, 0.27));
+      const smile = mesh(torus(0.05, 0.01, 10, Math.PI * 0.8), '#7a3a2a', 0.01, -0.1, 0.24);
+      smile.rotation.z = Math.PI * 1.1;
+      head.add(smile);
+      put(h.rig.body, mesh(torus(0.11, 0.035, 18), '#c81e2a', 0, 1.22, 0.02)).rotation.x = Math.PI / 2;
+      const knot = mesh(cone(0.07, 0.16, 3), '#c81e2a', 0, 1.1, 0.17);
+      knot.rotation.set(Math.PI + 0.3, 0, 0);
+      h.rig.body.add(knot);
+      const knife = new THREE.Group();
+      knife.add(mesh(rbox(0.035, 0.12, 0.035, 0.012), '#2a2024', 0, 0, 0));
+      knife.add(mesh(rbox(0.065, 0.36, 0.014, 0.005), '#9fb2c0', 0.012, 0.24, 0));
+      knife.position.set(0, -0.26, 0.03);
+      knife.rotation.x = Math.PI / 2;
+      h.rig.elbowR.add(knife);
+      h.rig.prop = knife;
+      return h;
+    },
+  },
+  {
     id: 'bandit', name: 'Bandit', level: 5, tier: 'gold',
     build() {
-      const h = humanoid({ skin: '#7c7c86', shirt: '#1e1e22', pants: '#3d2c22', shoes: '#ececec', sleeves: '#f2f2f2' });
+      const h = humanoid({ skin: '#7c7c86', outfitKey: 'bandit', outfit: OUTFITS.vest('#1e1e22', '#f2f2f2', '#e8c23a'), sleeves: '#f2f2f2', pants: '#3d2c22', shoes: '#ececec' });
       raccoonHead(h.rig.head, '#7c7c86');
       raccoonTail(h.rig.body, '#7c7c86');
-      h.rig.body.add(mesh(rbox(0.1, 0.5, 0.06, 0.03), '#e8c23a', 0, 0.86, 0.16));
-      const chain = mesh(torus(0.14, 0.02, 20), '#f2c230', 0, 1.08, 0.08);
-      chain.rotation.x = 1.2;
+      const chain = mesh(torus(0.12, 0.018, 20), '#f2c230', 0, 1.13, 0.06);
+      chain.rotation.x = 1.25;
       h.rig.body.add(chain);
       h.rig.head.add(mesh(rbox(0.4, 0.07, 0.05, 0.02), '#111', 0, 0.04, 0.27));
       const peel = new THREE.Group();
@@ -281,7 +567,7 @@ export const CHARACTERS = [
   {
     id: 'maki', name: 'Maki-san', level: 7, tier: 'gold',
     build() {
-      const h = humanoid({ skin: '#f6f3ea', shirt: '#2e7d4f', pants: '#1f3d2b', shoes: '#e2402f' });
+      const h = humanoid({ skin: '#f6f3ea', outfitKey: 'maki', outfit: OUTFITS.tunic('#2e7d4f', '#e2402f'), sleeves: '#2e7d4f', pants: '#1f3d2b', shoes: '#e2402f' });
       const head = h.rig.head;
       head.children[0].visible = false;
       head.add(mesh(cyl(0.3, 0.3, 0.44, 28), '#1f3326', 0, 0.02, 0));
@@ -292,7 +578,6 @@ export const CHARACTERS = [
       head.add(mesh(sph(0.06, 10, 8), '#ffffff', 0.1, 0.06, 0.28));
       head.add(mesh(sph(0.03, 8, 6), '#111', -0.1, 0.06, 0.33));
       head.add(mesh(sph(0.03, 8, 6), '#111', 0.1, 0.06, 0.33));
-      put(h.rig.body, mesh(torus(0.17, 0.04, 20), '#e2402f', 0, 1.15, 0)).rotation.x = Math.PI / 2;
       return h;
     },
   },
@@ -311,7 +596,17 @@ const HAIR = ['#2b1d16', '#e0682a', '#f4d03f', '#5b3a24', '#1e1e1e', '#3fb3a8', 
 
 export function buildCustomer(rng = Math.random) {
   const pick = (arr) => arr[Math.floor(rng() * arr.length)];
-  const h = humanoid({ skin: pick(SKINS), shirt: pick(SHIRTS), pants: pick(['#2d3a5a', '#3a3a3a', '#6d4c41', '#455a64']), shoes: pick(['#222', '#eee', '#c0392b']), scale: 1.0 + rng() * 0.12 });
+  const shirt = pick(SHIRTS);
+  const stripe = rng() < 0.35 ? pick(['#ffffff', '#1e1e24', '#f4d03f']) : null;
+  const h = humanoid({
+    skin: pick(SKINS),
+    outfitKey: `c${shirt}${stripe}`,
+    outfit: stripe ? OUTFITS.striped(shirt, stripe) : OUTFITS.plain(shirt),
+    sleeves: shirt,
+    pants: pick(['#2d3a5a', '#3a3a3a', '#6d4c41', '#455a64']),
+    shoes: pick(['#222', '#eee', '#c0392b']),
+    scale: 1.0 + rng() * 0.12,
+  });
   const head = h.rig.head;
   eyes(head, { y: 0.01 });
   const style = Math.floor(rng() * 4);
@@ -342,6 +637,17 @@ export function buildCustomer(rng = Math.random) {
   return h;
 }
 
+const lerp = THREE.MathUtils.lerp;
+
+function aimArm(arm, elbow, x, y, z, ex, ey, k, ez = 0) {
+  arm.rotation.x = lerp(arm.rotation.x, x, k);
+  arm.rotation.y = lerp(arm.rotation.y, y, k);
+  arm.rotation.z = lerp(arm.rotation.z, z, k);
+  elbow.rotation.x = lerp(elbow.rotation.x, ex, k);
+  elbow.rotation.y = lerp(elbow.rotation.y, ey, k);
+  elbow.rotation.z = lerp(elbow.rotation.z, ez, k);
+}
+
 export function animateRig(rig, dt, moveAmt, carrying, t) {
   const target = Math.min(1, moveAmt);
   rig.phase += dt * (6 + 6 * target);
@@ -349,24 +655,30 @@ export function animateRig(rig, dt, moveAmt, carrying, t) {
   rig.legL.rotation.x = swing;
   rig.legR.rotation.x = -swing;
   rig.body.position.y = Math.abs(Math.sin(rig.phase)) * 0.05 * target + Math.sin(t * 2) * 0.006;
+  const k = Math.min(1, dt * 14);
+  const out = rig.bulk ? 0.2 : 0;
+  if (rig.prop) rig.prop.visible = !carrying;
   if (carrying) {
-    rig.armL.rotation.x = THREE.MathUtils.lerp(rig.armL.rotation.x, -1.35, 0.3);
-    rig.armR.rotation.x = THREE.MathUtils.lerp(rig.armR.rotation.x, -1.35, 0.3);
-    rig.armL.rotation.z = THREE.MathUtils.lerp(rig.armL.rotation.z, -0.15, 0.3);
-    rig.armR.rotation.z = THREE.MathUtils.lerp(rig.armR.rotation.z, 0.15, 0.3);
+    const inward = rig.bulk ? 0.35 : 0;
+    aimArm(rig.armL, rig.elbowL, -0.45, 0, -0.16 - out, -1.2, inward, k);
+    aimArm(rig.armR, rig.elbowR, -0.45, 0, 0.16 + out, -1.2, -inward, k);
   } else {
-    rig.armL.rotation.x = THREE.MathUtils.lerp(rig.armL.rotation.x, -swing * 0.8, 0.3);
-    rig.armR.rotation.x = THREE.MathUtils.lerp(rig.armR.rotation.x, swing * 0.8, 0.3);
-    rig.armL.rotation.z = THREE.MathUtils.lerp(rig.armL.rotation.z, 0.08, 0.3);
-    rig.armR.rotation.z = THREE.MathUtils.lerp(rig.armR.rotation.z, -0.08, 0.3);
+    aimArm(rig.armL, rig.elbowL, -swing * 0.8, 0, -0.1 - out, -0.25 - target * 0.35, 0, k);
+    aimArm(rig.armR, rig.elbowR, swing * 0.8, 0, 0.1 + out, -0.25 - target * 0.35, 0, k);
   }
   rig.head.rotation.z = Math.sin(t * 1.3 + rig.phase * 0.1) * 0.03 * (1 - target);
 }
 
 export function poseIdle(rig, t) {
   rig.body.position.y = Math.sin(t * 2) * 0.01;
-  rig.armL.rotation.set(-0.9, 0, 0.85);
-  rig.armR.rotation.set(-0.95, 0, -0.85);
+  if (rig.idle === 'flex') {
+    const squeeze = 0.12 + Math.max(0, Math.sin(t * 2.2)) * 0.18;
+    aimArm(rig.armL, rig.elbowL, -0.15, 0, -1.45, 0, 0, 1, -1.75 - squeeze);
+    aimArm(rig.armR, rig.elbowR, -0.15, 0, 1.45, 0, 0, 1, 1.75 + squeeze);
+  } else {
+    aimArm(rig.armL, rig.elbowL, -0.55, 0, -0.2, -1.5, 1.45, 1);
+    aimArm(rig.armR, rig.elbowR, -0.55, 0, 0.2, -1.32, -1.5, 1);
+  }
   rig.legL.rotation.x = 0;
   rig.legR.rotation.x = 0;
   rig.head.rotation.set(Math.sin(t * 0.9) * 0.04, Math.sin(t * 0.6) * 0.15, 0);

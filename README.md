@@ -9,8 +9,8 @@ npm run build    # static build in dist/
 ```
 
 ## Modes
-- **Score Attack**: endless customers and three hearts; a heart is lost each time a customer walks out. Menu grows as you earn. Weekly local leaderboard (resets Sunday). Add a local Player 2 in the lobby for co-op.
-- **Versus**: two-minute match with shared customers. Play against the CPU (Easy/Normal/Hard) or a local Player 2.
+- **Score Attack**: endless customers and three hearts; a heart is lost each time a customer walks out. Menu grows as you earn; more chefs means a busier restaurant. Weekly local leaderboard (resets Sunday). Up to 4 chefs in co-op.
+- **Versus**: two-minute match with shared customers, Red vs Teal teams from 1v1 up to 2v2. Odd player counts get a CPU teammate (Easy/Normal/Hard).
 
 Pressing Play opens a **Pick a stage** screen. Every map works in both modes:
 
@@ -32,7 +32,7 @@ npm run online   # builds, then serves game + relay on http://localhost:5200 (PO
 
 1. Host opens the server address → **Play online** → **Host**, gets a 4-character room code (or copies the invite link).
 2. Mate opens the same server address → **Play online** → enters the code → **Join** (an invite link pre-fills it).
-3. Host picks mode (co-op Score Attack for up to 4, Versus for exactly 2) and stage, then **Start**.
+3. Host picks mode (co-op Score Attack or Red vs Teal Versus, 2–4 players; a CPU fills an odd team) and stage, then **Start**.
 
 Your mate must be able to reach port 5200 on your machine:
 - Same network: `http://<your-LAN-IP>:5200`
@@ -43,11 +43,16 @@ Your mate must be able to reach port 5200 on your machine:
 For development run `npm run dev` and `npm run server` side by side; Vite proxies `/ws` to the relay.
 
 ## Controls
-| | Move | Interact (hold to slice/pour) |
+Up to 4 players on one machine: click **+** next to your chef in the lobby (or press **A** on a gamepad) to add a player, then click their **Controls** pill to pick a layout.
+
+| Layout | Move | Interact (hold to slice/pour) |
 |---|---|---|
-| Solo | WASD / Arrows | Space / E / Enter |
-| P1 (2-player) | WASD | Space / E |
-| P2 (2-player) | Arrows | Enter / Right Shift |
+| Solo | WASD / Arrows / gamepad | Space / E / Enter / A |
+| WASD | WASD | Space / E |
+| Arrows | Arrow keys | Enter / Right Shift |
+| IJKL | IJKL | O / U |
+| Numpad | Numpad 8 4 5 6 | Numpad 0 / Enter |
+| Gamepad 1–4 | Left stick / D-pad | A / X |
 | Touch | Left stick | Hand button |
 
 `Esc` pauses and opens the help screen.

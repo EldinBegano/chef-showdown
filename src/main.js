@@ -1,9 +1,9 @@
 import * as THREE from 'three';
 import { CHARACTERS, buildCharacter, poseIdle, buildLobbyStage } from './models.js';
-import { Game } from './game.js';
+import { Game, PLAYER_COLORS } from './game.js';
 import { Bot } from './bot.js';
 import { LEVELS, LEVEL_ORDER, MODES, COMP_NAMES } from './levels.js';
-import { Keyboard, Touch, keyController } from './input.js';
+import { Keyboard, Touch, makeController, CONTROL_IDS, CONTROL_LABELS, connectedPads, padJoinPresses } from './input.js';
 import { Net } from './net.js';
 import { sfx } from './audio.js';
 import { save, levelFromXp, xpForLevel, board, submitScore } from './save.js';
@@ -33,7 +33,8 @@ const state = {
   cpu: 'normal',
   front: 'score',
   idx1: Math.max(0, CHARACTERS.findIndex((c) => c.id === save.data.char)),
-  idx2: Math.max(0, CHARACTERS.findIndex((c) => c.id === save.data.char2)),
+  locals: [],
+  p1ctrl: 'p1',
 };
 
 const offscreen = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
@@ -128,9 +129,8 @@ const lobby = (() => {
   const camera = new THREE.PerspectiveCamera(30, 1, 0.1, 50);
   camera.position.set(0, 1.25, 6.6);
   camera.lookAt(0, 1.0, 0);
-  const s1 = buildLobbyStage(scene);
-  const s2 = buildLobbyStage(scene);
-  return { scene, camera, slots: [{ stage: s1, model: null, hop: 0 }, { stage: s2, model: null, hop: 0 }] };
+  const slots = Array.from({ length: 4 }, () => ({ stage: buildLobbyStage(scene), model: null, hop: 0, idx: null }));
+  return { scene, camera, slots, slotScreen: [] };
 })();
 
 function setLobbyChar(slot, idx, { silhouette = false } = {}) {
@@ -149,21 +149,13 @@ function setLobbyChar(slot, idx, { silhouette = false } = {}) {
   layoutLobby();
 }
 
+const LOCAL_X = [0.3, 0.58, 0.86];
+
 function layoutLobby() {
   const a = innerWidth / innerHeight;
   const halfW = lobby.camera.position.z * Math.tan(THREE.MathUtils.degToRad(15)) * a;
   const narrow = innerWidth <= 820 || innerHeight <= 560;
   const x1 = narrow ? 0 : 0.04 * halfW * 2;
-  const x2 = 0.72 * halfW;
-  const p1 = lobby.slots[0];
-  const p2 = lobby.slots[1];
-  p1.stage.position.set(x1, 0, 0);
-  p2.stage.position.set(x2, 0, -1.2);
-  if (p1.model) p1.model.root.position.set(x1, 0, 0);
-  if (p2.model) {
-    p2.model.root.position.set(x2, 0, -1.2);
-    p2.model.root.scale.setScalar(0.92);
-  }
   if (narrow && a < 1) {
     lobby.camera.position.set(0, 1.3, 11);
     lobby.camera.lookAt(0, 0.45, 0);
@@ -174,6 +166,24 @@ function layoutLobby() {
     lobby.camera.position.set(0, 1.25, 6.6);
     lobby.camera.lookAt(0, 0.88, 0);
   }
+  const depth = (6.6 + 1.2) / 6.6;
+  lobby.slots.forEach((s, k) => {
+    const x = k === 0 ? x1 : LOCAL_X[k - 1] * halfW * depth;
+    const z = k === 0 ? 0 : -1.2;
+    s.stage.position.set(x, 0, z);
+    if (s.model) {
+      s.model.root.position.set(x, s.model.root.position.y, z);
+      s.model.root.scale.setScalar(k === 0 ? 1 : 0.8);
+      s.model.root.visible = k === 0 || !narrow;
+    }
+    if (k > 0 && narrow) s.stage.visible = false;
+  });
+  lobby.camera.updateMatrixWorld();
+  lobby.slotScreen = lobby.slots.map((s) => {
+    const v = s.stage.position.clone().project(lobby.camera);
+    return { x: Math.round(((v.x + 1) / 2) * innerWidth), y: Math.round(((1 - v.y) / 2) * innerHeight) };
+  });
+  if ($('.local-slots')) renderLocalSlots();
 }
 
 function tickLobby(dt, t) {
@@ -182,6 +192,7 @@ function tickLobby(dt, t) {
     poseIdle(s.model.rig, t + i * 1.7);
     s.hop = Math.max(0, s.hop - dt);
     s.model.root.position.y = Math.sin((s.hop / 0.35) * Math.PI) * 0.25;
+    if (i > 0) s.model.root.position.x = s.stage.position.x;
     s.model.root.rotation.y = Math.sin(t * 0.5 + i) * 0.18 - (i ? 0.25 : 0);
   });
 }
@@ -199,8 +210,6 @@ function fillStatic() {
   $('.vs-b').innerHTML = dishIcon('tamago_nigiri');
   $('[data-action=prev]').innerHTML = UI_ICONS.left;
   $('[data-action=next]').innerHTML = UI_ICONS.right;
-  $('[data-action=prev2]').innerHTML = UI_ICONS.left;
-  $('[data-action=next2]').innerHTML = UI_ICONS.right;
   $('.cash-ico').innerHTML = UI_ICONS.cash;
   $('.who .name').value = save.data.name;
   updateSoundBtn();
@@ -235,15 +244,107 @@ function refreshLobby() {
   const next = upcoming[0];
   $('.togo').textContent = next ? `${xpForLevel(next.level) - save.data.xp} XP to go` : 'Everything unlocked!';
 
-  $('.opp').textContent = state.p2 != null ? 'Local 2 players' : `vs CPU · ${state.cpu[0].toUpperCase()}${state.cpu.slice(1)}`;
+  const humans = 1 + state.locals.length;
+  const diff = `${state.cpu[0].toUpperCase()}${state.cpu.slice(1)}`;
+  $('.opp').textContent = humans === 1 ? `vs CPU · ${diff}` : humans % 2 ? `${humans} players + CPU · ${diff}` : `${humans} players · ${humans / 2} vs ${humans / 2}`;
 
   const entries = board();
   const mine = entries.findIndex((e) => e.name === save.data.name);
   $('.best-rank').textContent = mine >= 0 ? mine + 1 : '–';
 
-  $('.join').classList.toggle('hidden', state.p2 != null);
-  $('.p2ui').classList.toggle('hidden', state.p2 == null);
-  if (state.p2 != null) $('.p2tag').textContent = `Player 2 · ${CHARACTERS[state.p2].name}`;
+  renderLocalSlots();
+}
+
+const JOIN_SVG = `<svg viewBox="0 0 120 220" aria-hidden="true"><path d="M60 8c-16 0-30 6-34 20-14 0-20 14-12 26 6 9 14 10 20 9v6c-4 8-6 14-6 24-12 8-20 22-22 42l-2 28h18l4-24 4 0v58l-10 6v10h28l6-36 6 36h28v-10l-10-6v-58h4l4 24h18l-2-28c-2-20-10-34-22-42 0-10-2-16-6-24v-6c6 1 14 0 20-9 8-12 2-26-12-26C90 14 76 8 60 8z" fill="rgba(0,0,0,.12)" stroke="#fff" stroke-width="4" stroke-linejoin="round"/><path d="M60 104v34M43 121h34" stroke="#fff" stroke-width="8" stroke-linecap="round"/></svg>`;
+
+function ctrlLabel(id) {
+  const missing = id.startsWith('pad') && !connectedPads().includes(Number(id.slice(3)));
+  return `Controls: ${CONTROL_LABELS[id]}${missing ? ' (not connected)' : ''}`;
+}
+
+function usedCtrls(except = -1) {
+  return [state.p1ctrl, ...state.locals.map((l) => l.ctrl)].filter((_, i) => i !== except);
+}
+
+function freeCtrl(prefer) {
+  const used = new Set(usedCtrls());
+  const pads = connectedPads().map((i) => `pad${i}`);
+  return [prefer, ...pads, 'p2', 'p3', 'p4', 'p1', ...CONTROL_IDS].find((c) => c && !used.has(c)) || 'p2';
+}
+
+function cycleCtrl(k) {
+  const options = CONTROL_IDS.filter((c) => !usedCtrls(k).includes(c));
+  const current = k ? state.locals[k - 1].ctrl : state.p1ctrl;
+  const next = options[(options.indexOf(current) + 1) % options.length];
+  if (k) state.locals[k - 1].ctrl = next;
+  else state.p1ctrl = next;
+  renderLocalSlots();
+}
+
+function syncLocalModels() {
+  for (let k = 1; k <= 3; k++) {
+    const l = state.locals[k - 1];
+    const idx = l ? l.idx : null;
+    if (lobby.slots[k].idx === idx) continue;
+    lobby.slots[k].idx = idx;
+    setLobbyChar(k, idx);
+  }
+}
+
+function addLocal(ctrl) {
+  if (state.locals.length >= 3) return;
+  const used = new Set([state.idx1, ...state.locals.map((l) => l.idx)]);
+  let idx = CHARACTERS.findIndex((c, i) => !used.has(i) && isUnlocked(c));
+  if (idx < 0) idx = CHARACTERS.findIndex((c) => isUnlocked(c));
+  state.locals.push({ idx, ctrl: ctrl || freeCtrl(['p2', 'p3', 'p4'][state.locals.length]) });
+  sfx.arrive();
+  syncLocalModels();
+  refreshLobby();
+}
+
+function removeLocal(k) {
+  state.locals.splice(k - 1, 1);
+  syncLocalModels();
+  refreshLobby();
+}
+
+function cycleLocalChar(k, dir) {
+  const l = state.locals[k - 1];
+  const n = CHARACTERS.length;
+  let i = l.idx;
+  for (let step = 0; step < n; step++) {
+    i = (i + dir + n) % n;
+    if (isUnlocked(CHARACTERS[i])) break;
+  }
+  l.idx = i;
+  syncLocalModels();
+  refreshLobby();
+}
+
+function renderLocalSlots() {
+  const wrap = $('.local-slots');
+  const pos = lobby.slotScreen;
+  const n = state.locals.length;
+  let html = '';
+  for (let k = 1; k <= 3; k++) {
+    const p = pos[k];
+    if (!p) continue;
+    if (k <= n) {
+      const l = state.locals[k - 1];
+      html += `<div class="lslot" style="left:${p.x}px;top:${p.y + 6}px">
+        <div class="ltag" style="--c:${PLAYER_COLORS[k]}">P${k + 1} · ${CHARACTERS[l.idx].name}</div>
+        <div class="arrows"><button class="round-btn mini" data-action="lprev" data-slot="${k}" aria-label="Previous chef">${UI_ICONS.left}</button><button class="round-btn mini" data-action="lnext" data-slot="${k}" aria-label="Next chef">${UI_ICONS.right}</button></div>
+        <button class="pill" data-action="lctrl" data-slot="${k}">${ctrlLabel(l.ctrl)}</button>
+        <button class="leave" data-action="lremove" data-slot="${k}">Remove</button>
+      </div>`;
+    } else if (k === n + 1) {
+      html += `<button class="lslot join" data-action="ljoin" style="left:${p.x}px;top:${p.y}px">${JOIN_SVG}<span>Add player ${k + 1}</span><small>or press A on a gamepad</small></button>`;
+    }
+  }
+  wrap.innerHTML = html;
+  const p1 = $('.p1ctl');
+  p1.classList.toggle('hidden', !n);
+  p1.textContent = ctrlLabel(state.p1ctrl);
 }
 
 function setFront(mode) {
@@ -266,20 +367,6 @@ function cycleP1(dir) {
   refreshLobby();
 }
 
-function cycleP2(dir) {
-  const n = CHARACTERS.length;
-  let i = state.p2;
-  for (let k = 0; k < n; k++) {
-    i = (i + dir + n) % n;
-    if (isUnlocked(CHARACTERS[i])) break;
-  }
-  state.p2 = i;
-  save.data.char2 = CHARACTERS[i].id;
-  save.write();
-  setLobbyChar(1, i);
-  refreshLobby();
-}
-
 function showLobby() {
   state.screen = 'lobby';
   document.body.classList.add('in-lobby');
@@ -288,21 +375,25 @@ function showLobby() {
   $('#touch').classList.add('hidden');
   renderer.setClearColor(0x000000, 0);
   setLobbyChar(0, state.idx1, { silhouette: !isUnlocked(CHARACTERS[state.idx1]) });
-  setLobbyChar(1, state.p2);
+  lobby.slots.forEach((s, k) => k && (s.idx = undefined));
+  syncLocalModels();
   refreshLobby();
 }
 
 /* ---------- game ---------- */
 
-function playerChars(modeId) {
-  const c1 = CHARACTERS[state.idx1];
-  if (state.p2 != null) return [c1.id, CHARACTERS[state.p2].id];
-  if (modeId !== 'versus') return [c1.id];
-  if (!state.cpuChar || state.cpuChar === c1.id) {
-    const others = CHARACTERS.filter((c) => c.id !== c1.id);
-    state.cpuChar = others[Math.floor(Math.random() * others.length)].id;
+function lineup(modeId) {
+  const list = [{ name: save.data.name || 'Chef', charId: CHARACTERS[state.idx1].id }, ...state.locals.map((l, i) => ({ name: `Player ${i + 2}`, charId: CHARACTERS[l.idx].id }))];
+  if (modeId === 'versus' && list.length % 2) {
+    const taken = new Set(list.map((p) => p.charId));
+    if (!state.cpuChar || taken.has(state.cpuChar)) {
+      const pool = CHARACTERS.filter((c) => !taken.has(c.id));
+      state.cpuChar = (pool.length ? pool : CHARACTERS)[Math.floor(Math.random() * (pool.length || CHARACTERS.length))].id;
+    }
+    state.cpuName ||= CPU_NAMES[Math.floor(Math.random() * CPU_NAMES.length)];
+    list.push({ name: state.cpuName, charId: state.cpuChar, cpu: true });
   }
-  return [c1.id, state.cpuChar];
+  return list;
 }
 
 function openStages(modeId) {
@@ -315,9 +406,20 @@ function openStages(modeId) {
   document.body.classList.add('in-stages');
   sec.dataset.mode = modeId;
   $('#lobby').classList.add('hidden');
-  $('.stage-sub').textContent = modeId === 'versus' ? (state.p2 != null ? 'LOCAL VERSUS' : `VS CPU · ${state.cpu.toUpperCase()}`) : state.p2 != null ? 'CO-OP SCORE ATTACK' : 'SCORE ATTACK';
-  const chars = playerChars(modeId);
-  $('.stage-players').innerHTML = chars.map((id, i) => `<div class="sp ${i ? 'teal' : 'red'}"><img src="${portraits[id]}" alt=""><b>${i === 0 ? escapeHtml(save.data.name) : state.p2 != null ? 'Player 2' : 'CPU'}</b></div>`).join('');
+  const lu = lineup(modeId);
+  const humans = 1 + state.locals.length;
+  $('.stage-sub').textContent =
+    modeId === 'versus'
+      ? humans === 1
+        ? `VS CPU · ${state.cpu.toUpperCase()}`
+        : `LOCAL VERSUS · ${lu.length / 2} VS ${lu.length / 2}`
+      : humans > 1
+        ? `CO-OP SCORE ATTACK · ${humans} CHEFS`
+        : 'SCORE ATTACK';
+  const sp = $('.stage-players');
+  sp.classList.toggle('many', lu.length > 2);
+  const order = modeId === 'versus' ? [...lu.filter((_, i) => i % 2 === 0), ...lu.filter((_, i) => i % 2 === 1)] : lu;
+  sp.innerHTML = order.map((p) => `<div class="sp ${modeId === 'versus' && lu.indexOf(p) % 2 ? 'teal' : 'red'}"><img src="${portraits[p.charId]}" alt=""><b>${escapeHtml(p.name)}</b></div>`).join('');
   const label = modeId === 'versus' ? 'VERSUS' : 'SCORE ATTACK';
   $('.stage-cards').innerHTML = LEVEL_ORDER.map((id, i) => {
     const lv = LEVELS[id];
@@ -357,15 +459,11 @@ function startGame(modeId, levelId = save.data.kitchen[modeId]) {
   save.write();
   closeStages();
   state.lastLevel = levelId;
-  const name = save.data.name || 'Chef';
-  const players = [];
-  if (state.p2 != null) {
-    players.push({ name, charId: c1.id, controller: keyController(kb, 'p1', touch) });
-    players.push({ name: 'Player 2', charId: CHARACTERS[state.p2].id, controller: keyController(kb, 'p2') });
-  } else {
-    players.push({ name, charId: c1.id, controller: keyController(kb, 'solo', touch) });
-    if (modeId === 'versus') players.push({ name: CPU_NAMES[Math.floor(Math.random() * CPU_NAMES.length)], charId: playerChars('versus')[1], bot: true });
-  }
+  const players = lineup(modeId).map((p, i) =>
+    p.cpu
+      ? { name: p.name, charId: p.charId, bot: true }
+      : { name: p.name, charId: p.charId, controller: makeController(i === 0 ? (state.locals.length ? state.p1ctrl : 'solo') : state.locals[i - 1].ctrl, kb, i === 0 ? touch : null) },
+  );
   launchGame(modeId, levelId, players, null);
 }
 
@@ -386,15 +484,14 @@ function launchGame(modeId, levelId, players, net) {
   hud.className = modeId;
   $('#touch').classList.toggle('hidden', !touch);
   renderer.setClearColor(0x000000, 1);
-  if (modeId === 'versus') {
-    const [a, b] = game.players;
-    $('.vsbar .red img').src = portraits[a.charId];
-    $('.vsbar .teal img').src = portraits[b.charId];
-    $('.vs-side.left img').src = portraits[a.charId];
-    $('.vs-side.right img').src = portraits[b.charId];
-    $('.n1').textContent = a.name;
-    $('.n2').textContent = b.name;
-  }
+  if (modeId === 'versus')
+    for (const t of [0, 1]) {
+      const members = game.players.filter((p) => p.team === t);
+      const pics = members.map((p) => `<img src="${portraits[p.charId]}" alt="">`).join('');
+      $(t ? '.vsbar .teal .pics' : '.vsbar .red .pics').innerHTML = pics;
+      $(t ? '.vs-side.right' : '.vs-side.left').innerHTML = pics;
+      $(t ? '.n2' : '.n1').textContent = members.map((p) => p.name).join(' & ');
+    }
   renderHearts();
   closeModal();
   document.activeElement?.blur();
@@ -462,7 +559,6 @@ async function hostRoom() {
     const taken = new Set(o.roster.map((r) => r.name));
     for (let n = 2; taken.has(name); n++) name = `${cleanName(m.data?.name).slice(0, 11)} ${n}`;
     o.roster.push({ id: m.id, name, charId: cleanChar(m.data?.charId) });
-    if (o.mode === 'versus' && o.roster.length > 2) o.mode = 'score';
     sfx.arrive();
     syncRoom();
   });
@@ -532,7 +628,7 @@ function renderRoom(err = '') {
   const host = o.role === 'host';
   const link = `${location.origin}${location.pathname}?room=${o.code}`;
   const roster = o.roster
-    .map((r, i) => `<div class="rp"><img src="${portraits[cleanChar(r.charId)]}" alt=""><b>${escapeHtml(r.name)}</b><small>${i === 0 ? 'Host' : r.id === o.myId ? 'You' : 'Guest'}</small></div>`)
+    .map((r, i) => `<div class="rp"><img src="${portraits[cleanChar(r.charId)]}" alt=""><b>${escapeHtml(r.name)}</b><small>${i === 0 ? 'Host' : r.id === o.myId ? 'You' : 'Guest'}</small>${o.mode === 'versus' ? `<span class="team-tag ${i % 2 ? 'teal' : 'red'}">${i % 2 ? 'Teal' : 'Red'}</span>` : ''}</div>`)
     .join('');
   const empty = Array.from({ length: Math.max(0, 2 - o.roster.length) }, () => '<div class="rp empty"><span>+</span><small>Waiting…</small></div>').join('');
   const modes = [
@@ -541,11 +637,12 @@ function renderRoom(err = '') {
   ];
   const opts = host
     ? `<div class="room-opts">
-        <div><span>Mode</span>${modes.map(([id, name]) => `<button class="pill ${o.mode === id ? 'on' : ''}" data-action="online-mode" data-mode="${id}" ${id === 'versus' && o.roster.length > 2 ? 'disabled' : ''}>${name}</button>`).join('')}</div>
+        <div><span>Mode</span>${modes.map(([id, name]) => `<button class="pill ${o.mode === id ? 'on' : ''}" data-action="online-mode" data-mode="${id}">${name}</button>`).join('')}</div>
         <div><span>Stage</span>${LEVEL_ORDER.map((id) => `<button class="pill ${o.level === id ? 'on' : ''}" data-action="online-stage" data-level="${id}">${LEVELS[id].name}</button>`).join('')}</div>
       </div>`
     : `<p class="room-info">${o.mode === 'versus' ? 'Versus' : 'Score Attack'} · ${LEVELS[o.level]?.name || ''}</p>`;
-  const canStart = o.mode !== 'versus' || o.roster.length === 2;
+  const canStart = o.mode !== 'versus' || o.roster.length >= 2;
+  const cpuNote = o.mode === 'versus' && o.roster.length % 2 && o.roster.length > 1 ? '<p class="note">Odd number of chefs: a CPU joins the Teal team.</p>' : '';
   openModal(
     `<header class="teal">Online Room</header><div class="body online">
       <div class="room-code"><small>ROOM CODE</small><b>${o.code}</b>
@@ -553,9 +650,10 @@ function renderRoom(err = '') {
       <p class="note">Send the code or link to your mate. They open the game from the same server and press <b>Join</b>.</p>
       <div class="roster">${roster}${empty}</div>
       ${opts}
+      ${cpuNote}
       <p class="err">${escapeHtml(err)}</p>
       <div class="actions">
-        ${host ? `<button class="btn teal" data-action="online-start" ${canStart ? '' : 'disabled'}>${canStart ? 'Start' : 'Versus needs 2 players'}</button>` : '<span class="wait-host">Waiting for the host to start…</span>'}
+        ${host ? `<button class="btn teal" data-action="online-start" ${canStart ? '' : 'disabled'}>${canStart ? 'Start' : 'Versus needs 2+ players'}</button>` : '<span class="wait-host">Waiting for the host to start…</span>'}
         <button class="btn play" data-action="online-leave">Leave</button>
       </div>
     </div>`,
@@ -565,8 +663,14 @@ function renderRoom(err = '') {
 
 function hostStart() {
   const o = state.online;
-  if (o.mode === 'versus' && o.roster.length !== 2) return renderRoom('Versus needs exactly 2 players.');
-  const msg = { k: 'start', mode: o.mode, level: o.level, players: o.roster.map((r) => ({ id: r.id, name: r.name, charId: r.charId })) };
+  if (o.mode === 'versus' && o.roster.length < 2) return renderRoom('Versus needs at least 2 players.');
+  const players = o.roster.map((r) => ({ id: r.id, name: r.name, charId: r.charId }));
+  if (o.mode === 'versus' && players.length % 2) {
+    const taken = new Set(players.map((p) => p.charId));
+    const pool = CHARACTERS.filter((c) => !taken.has(c.id));
+    players.push({ id: -1, name: CPU_NAMES[Math.floor(Math.random() * CPU_NAMES.length)], charId: (pool[0] || CHARACTERS[0]).id, bot: true });
+  }
+  const msg = { k: 'start', mode: o.mode, level: o.level, players };
   o.net.send({ t: 'lock', locked: true });
   o.net.send({ t: 'broadcast', data: msg });
   launchOnline(msg);
@@ -583,8 +687,9 @@ function launchOnline(msg) {
     name: cleanName(p.name),
     charId: cleanChar(p.charId),
     netId: p.id,
-    controller: i === o.me ? keyController(kb, 'solo', touch) : null,
-    remote: o.role === 'host' && i !== o.me,
+    controller: i === o.me ? makeController('solo', kb, touch) : null,
+    bot: o.role === 'host' && !!p.bot,
+    remote: o.role === 'host' && i !== o.me && !p.bot,
     puppet: o.role === 'guest' && i !== o.me,
   }));
   sfx.go();
@@ -650,7 +755,8 @@ function onEvent(type, data) {
     void h.offsetWidth;
     h.classList.add('hit');
   } else if (type === 'money') {
-    const m = state.game.mode.id === 'score' ? $('.money') : $(data.player ? '.m2' : '.m1');
+    const team = state.game.players[data.player]?.team ?? 0;
+    const m = state.game.mode.id === 'score' ? $('.money') : $(team ? '.m2' : '.m1');
     m.classList.remove('bump');
     void m.offsetWidth;
     m.classList.add('bump');
@@ -672,17 +778,20 @@ function updateHud() {
       $('.money').textContent = `$${g.money}`;
     }
   } else {
-    const [a, b] = g.players;
-    $('.m1').textContent = `$${a.money}`;
-    $('.m2').textContent = `$${b.money}`;
-    $('.vsbar .red').classList.toggle('lead', a.money > b.money);
-    $('.vsbar .teal').classList.toggle('lead', b.money > a.money);
+    const a = g.teamMoney(0);
+    const b = g.teamMoney(1);
+    $('.m1').textContent = `$${a}`;
+    $('.m2').textContent = `$${b}`;
+    $('.vsbar .red').classList.toggle('lead', a > b);
+    $('.vsbar .teal').classList.toggle('lead', b > a);
     const secs = Math.ceil(g.timeLeft);
     const t = $('.timer b');
     if (t.textContent !== String(secs)) t.textContent = secs;
     $('.timer').classList.toggle('low', secs <= 10 && g.phase === 'play');
   }
 }
+
+const r_team = (p, i) => (p.team === 1 || p.team === 0 ? p.team : i % 2);
 
 function endGame(raw) {
   if (!state.game) return;
@@ -694,9 +803,10 @@ function endGame(raw) {
     served: n(raw.served),
     lost: n(raw.lost),
     elapsed: n(raw.elapsed),
-    players: (raw.players || []).map((p) => ({ name: cleanName(p.name), charId: cleanChar(p.charId), money: n(p.money), served: n(p.served) })),
+    players: (raw.players || []).map((p, i) => ({ name: cleanName(p.name), charId: cleanChar(p.charId), money: n(p.money), served: n(p.served), team: r_team(p, i) })),
   };
-  if (r.mode === 'versus' && r.players.length < 2) r.players.push({ name: 'Nobody', charId: 'morel', money: 0, served: 0 });
+  if (r.mode === 'versus' && r.players.length < 2) r.players.push({ name: 'Nobody', charId: 'morel', money: 0, served: 0, team: 1 });
+  const teamSum = (t) => r.players.reduce((sum, p) => sum + (p.team === t ? p.money : 0), 0);
   const me = state.online ? state.online.me : 0;
   const before = levelFromXp(save.data.xp).level;
   let xp = 0;
@@ -706,15 +816,15 @@ function endGame(raw) {
     const name = r.players.map((p) => p.name).join(' & ').slice(0, 40);
     rank = submitScore({ name, score: r.money, served: r.served, level: r.level });
   } else {
-    const a = r.players[me];
-    const b = r.players[1 - me];
-    xp = a.money + (a.money > b.money ? 25 : a.money === b.money ? 10 : 5);
+    const mine = teamSum(r.players[me].team);
+    const theirs = teamSum(1 - r.players[me].team);
+    xp = r.players[me].money + (mine > theirs ? 25 : mine === theirs ? 10 : 5);
   }
   save.data.xp += xp;
   save.write();
   const after = levelFromXp(save.data.xp);
   const newChars = CHARACTERS.filter((c) => c.level > before && c.level <= after.level);
-  (r.mode === 'versus' && r.players[me].money >= r.players[1 - me].money ? sfx.win : sfx.end)();
+  (r.mode === 'versus' && teamSum(r.players[me].team) >= teamSum(1 - r.players[me].team) ? sfx.win : sfx.end)();
 
   const xpBlock = `<div class="xp-gain">+${xp} XP ${after.level > before ? `· <span style="color:#b0124f">LEVEL UP! Level ${after.level}</span>` : `· Level ${after.level}`}
     <div class="xpbar"><i style="width:${(after.into / after.need) * 100}%"></i></div>
@@ -740,13 +850,15 @@ function endGame(raw) {
       { closable: false },
     );
   } else {
-    const [a, b] = r.players;
-    const winner = a.money === b.money ? null : a.money > b.money ? a : b;
-    const pl = (p) => `<div class="pl ${winner === p ? 'win' : ''}"><img src="${portraits[p.charId]}" alt=""><b>${escapeHtml(p.name)}</b><b class="amt">$${p.money}</b><small>${p.served} served</small></div>`;
+    const teams = [0, 1].map((t) => ({ t, members: r.players.filter((p) => p.team === t), money: teamSum(t) }));
+    const winner = teams[0].money === teams[1].money ? null : teams[0].money > teams[1].money ? 0 : 1;
+    const solo = teams.every((tm) => tm.members.length === 1);
+    const title = winner == null ? "It's a draw!" : solo ? `${escapeHtml(teams[winner].members[0].name)} wins!` : `${winner ? 'Teal' : 'Red'} team wins!`;
+    const pl = (tm) => `<div class="pl ${winner === tm.t ? 'win' : ''}"><div class="pics">${tm.members.map((p) => `<img src="${portraits[p.charId]}" alt="">`).join('')}</div><b>${escapeHtml(tm.members.map((p) => p.name).join(' & '))}</b><b class="amt">$${tm.money}</b><small>${tm.members.map((p) => `${escapeHtml(p.name)}: ${p.served} served`).join(' · ')}</small></div>`;
     openModal(
       `<header class="pink">Showdown Over!</header><div class="body">
-        <div class="winner">${winner ? `${escapeHtml(winner.name)} wins!` : "It's a draw!"}</div>
-        <div class="versus-result">${pl(a)}${pl(b)}</div>
+        <div class="winner">${title}</div>
+        <div class="versus-result">${pl(teams[0])}${pl(teams[1])}</div>
         ${xpBlock}${actions}</div>`,
       { closable: false },
     );
@@ -801,13 +913,13 @@ function helpHtml(levelId) {
     <h3>Controls</h3>
     <div class="keys-grid">
       <span>Solo</span><span><kbd>WASD</kbd> / <kbd>Arrows</kbd> move · <kbd>Space</kbd> <kbd>E</kbd> <kbd>Enter</kbd> interact (hold to slice/pour)</span>
-      <span>Player 1</span><span><kbd>WASD</kbd> + <kbd>Space</kbd> / <kbd>E</kbd></span>
-      <span>Player 2</span><span><kbd>Arrows</kbd> + <kbd>Enter</kbd> / <kbd>Right Shift</kbd></span>
+      <span>Couch</span><span>Up to 4 chefs: add players with the <b>+</b> in the lobby (or press <kbd>A</kbd> on a gamepad) and pick each one's controls</span>
+      <span>Layouts</span><span><kbd>WASD</kbd> + <kbd>Space</kbd> · <kbd>Arrows</kbd> + <kbd>Enter</kbd> · <kbd>IJKL</kbd> + <kbd>O</kbd> · <kbd>Numpad 8456</kbd> + <kbd>Num 0</kbd> · Gamepad stick/D-pad + <kbd>A</kbd></span>
       <span>Touch</span><span>Left stick moves, hand button interacts</span>
       <span>Menu</span><span><kbd>Esc</kbd> opens this help and pauses</span>
     </div>
     <h3>Modes</h3>
-    <p><b>Score Attack</b>: three hearts, endless customers. Each walk-out costs a heart. Add a local player 2 to cook together. Scores go on the weekly board, which resets every Sunday.<br><b>Versus</b>: two minutes, shared customers, whoever earns the most wins.</p>
+    <p><b>Score Attack</b>: three hearts, endless customers. Each walk-out costs a heart. Add a local player 2 to cook together. Scores go on the weekly board, which resets every Sunday.<br><b>Versus</b>: two minutes, shared customers, Red vs Teal (1v1 up to 2v2; an odd player count gets a CPU teammate). The team that earns the most wins.</p>
   </div>`;
 }
 
@@ -846,19 +958,16 @@ document.addEventListener('click', (e) => {
       return cycleP1(-1);
     case 'next':
       return cycleP1(1);
-    case 'prev2':
-      return cycleP2(-1);
-    case 'next2':
-      return cycleP2(1);
-    case 'join':
-      state.p2 = state.idx2 === state.idx1 ? (state.idx1 + 1) % CHARACTERS.length : state.idx2;
-      if (!isUnlocked(CHARACTERS[state.p2])) state.p2 = CHARACTERS.findIndex((c, i) => i !== state.idx1 && isUnlocked(c));
-      setLobbyChar(1, state.p2);
-      return refreshLobby();
-    case 'leave':
-      state.p2 = null;
-      setLobbyChar(1, null);
-      return refreshLobby();
+    case 'ljoin':
+      return addLocal();
+    case 'lremove':
+      return removeLocal(Number(b.dataset.slot));
+    case 'lprev':
+      return cycleLocalChar(Number(b.dataset.slot), -1);
+    case 'lnext':
+      return cycleLocalChar(Number(b.dataset.slot), 1);
+    case 'lctrl':
+      return cycleCtrl(Number(b.dataset.slot));
     case 'play':
       return openStages(b.dataset.mode);
     case 'stage':
@@ -907,7 +1016,6 @@ document.addEventListener('click', (e) => {
       return;
     }
     case 'cpu':
-      if (state.p2 != null) return;
       state.cpu = { easy: 'normal', normal: 'hard', hard: 'easy' }[state.cpu];
       return refreshLobby();
     case 'board':
@@ -979,6 +1087,7 @@ function frame(now) {
   last = now;
   const t = now / 1000;
   if (state.screen === 'lobby') {
+    if (!modalOpen()) for (const i of padJoinPresses()) if (!usedCtrls().includes(`pad${i}`)) addLocal(`pad${i}`);
     tickLobby(dt, t);
     renderer.render(lobby.scene, lobby.camera);
   } else if (state.screen === 'stages') {

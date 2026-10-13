@@ -75,30 +75,14 @@
       <div class="carousel">
         <div class="char-name"></div>
         <div class="char-lock hidden"></div>
+        <button class="pill p1ctl hidden" data-action="lctrl" data-slot="0"></button>
         <div class="arrows">
           <button class="round-btn" data-action="prev" aria-label="Previous chef"></button>
           <button class="round-btn" data-action="next" aria-label="Next chef"></button>
         </div>
       </div>
 
-      <div class="p2slot">
-        <button class="join" data-action="join" aria-label="Add local player 2">
-          <svg viewBox="0 0 120 220" aria-hidden="true">
-            <path d="M60 8c-16 0-30 6-34 20-14 0-20 14-12 26 6 9 14 10 20 9v6c-4 8-6 14-6 24-12 8-20 22-22 42l-2 28h18l4-24 4 0v58l-10 6v10h28l6-36 6 36h28v-10l-10-6v-58h4l4 24h18l-2-28c-2-20-10-34-22-42 0-10-2-16-6-24v-6c6 1 14 0 20-9 8-12 2-26-12-26C90 14 76 8 60 8z" fill="rgba(0,0,0,.12)" stroke="#fff" stroke-width="4" stroke-linejoin="round" />
-            <path d="M60 104v34M43 121h34" stroke="#fff" stroke-width="8" stroke-linecap="round" />
-          </svg>
-          <span>Local player 2</span>
-        </button>
-        <div class="p2ui hidden">
-          <div class="p2tag">Player 2</div>
-          <div class="arrows">
-            <button class="round-btn mini" data-action="prev2" aria-label="Previous chef for player 2"></button>
-            <button class="round-btn mini" data-action="next2" aria-label="Next chef for player 2"></button>
-          </div>
-          <button class="leave" data-action="leave">Remove</button>
-          <div class="keys">P1 WASD + Space · P2 Arrows + Enter</div>
-        </div>
-      </div>
+      <div class="local-slots"></div>
     </section>
 
     <section id="stages" class="hidden">
@@ -115,16 +99,16 @@
     </section>
 
     <section id="hud" class="hidden">
-      <div class="vs-side left"><img alt="" /></div>
-      <div class="vs-side right"><img alt="" /></div>
+      <div class="vs-side left"></div>
+      <div class="vs-side right"></div>
       <div class="plaque">
         <div class="cash"><span class="cash-ico"></span><b class="money">$0</b></div>
         <div class="hearts"></div>
       </div>
       <div class="vsbar">
-        <div class="side red"><img alt="" /><b class="m1">$0</b><span class="n1"></span></div>
+        <div class="side red"><span class="pics"></span><b class="m1">$0</b><span class="n1"></span></div>
         <div class="timer"><b>90</b></div>
-        <div class="side teal"><span class="n2"></span><b class="m2">$0</b><img alt="" /></div>
+        <div class="side teal"><span class="n2"></span><b class="m2">$0</b><span class="pics"></span></div>
       </div>
       <div class="toast"></div>
       <button class="btn teal quit" data-action="quit">Quit</button>
