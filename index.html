@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
+    <title>Chef Showdown</title>
+    <meta name="description" content="Co-op cooking rush: grab a tray, cook, serve, and outscore the weekly board — or go head to head." />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Lilita+One&display=swap" rel="stylesheet" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="/src/style.css" />
+  </head>
+  <body class="in-lobby">
+    <div class="lobby-bg"></div>
+    <canvas id="gl"></canvas>
+    <div id="vignette"></div>
+    <div id="world"></div>
+
+    <section id="lobby">
+      <div class="profile">
+        <div class="avatar"><img alt="" /><span class="lvl"><small>Level</small><b>1</b></span></div>
+        <div class="who">
+          <input class="name" maxlength="14" spellcheck="false" aria-label="Your name" />
+          <div class="xpbar"><i></i></div>
+        </div>
+      </div>
+
+      <h1 class="logo" aria-label="Chef Showdown">
+        <span class="chef">chef<span class="burger"></span></span>
+        <span class="showdown">SHOWDOWN</span>
+      </h1>
+
+      <div class="unlocks">
+        <div class="unlocks-head"><span class="badge-ico"></span>UNLOCKS</div>
+        <div class="tiles"></div>
+        <div class="togo"></div>
+        <button class="btn teal small" data-action="unlocks">View</button>
+      </div>
+
+      <div class="modes">
+        <article class="card score front" data-mode="score">
+          <header><span class="mascot shake-ico"></span>SCORE ATTACK</header>
+          <div class="art score-art">
+            <span class="resets">BOARD RESETS SUNDAY</span>
+            <div class="trophy"></div>
+            <div class="rank">#<b class="best-rank">–</b></div>
+          </div>
+          <p>Go solo or team up to outscore the weekly leaderboard</p>
+          <div class="opts">
+            <button class="pill" data-action="board">Leaderboard</button>
+          </div>
+          <button class="btn play" data-action="play" data-mode="score">Play</button>
+        </article>
+        <article class="card versus back" data-mode="versus">
+          <header><span class="mascot sushi-ico"></span>VERSUS</header>
+          <div class="art versus-art">
+            <div class="vs-a"></div>
+            <b class="vs">VS</b>
+            <div class="vs-b"></div>
+          </div>
+          <p>Go head to head with friends</p>
+          <div class="opts">
+            <button class="pill opp" data-action="cpu"></button>
+          </div>
+          <button class="btn play" data-action="play" data-mode="versus">Play</button>
+        </article>
+      </div>
+
+      <button class="btn online-btn" data-action="online">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="2.2" /><path d="M3 12h18M12 3c3.2 3.6 3.2 14.4 0 18M12 3c-3.2 3.6-3.2 14.4 0 18" fill="none" stroke="currentColor" stroke-width="2.2" /></svg>
+        Play online
+      </button>
+
+      <div class="carousel">
+        <div class="char-name"></div>
+        <div class="char-lock hidden"></div>
+        <div class="arrows">
+          <button class="round-btn" data-action="prev" aria-label="Previous chef"></button>
+          <button class="round-btn" data-action="next" aria-label="Next chef"></button>
+        </div>
+      </div>
+
+      <div class="p2slot">
+        <button class="join" data-action="join" aria-label="Add local player 2">
+          <svg viewBox="0 0 120 220" aria-hidden="true">
+            <path d="M60 8c-16 0-30 6-34 20-14 0-20 14-12 26 6 9 14 10 20 9v6c-4 8-6 14-6 24-12 8-20 22-22 42l-2 28h18l4-24 4 0v58l-10 6v10h28l6-36 6 36h28v-10l-10-6v-58h4l4 24h18l-2-28c-2-20-10-34-22-42 0-10-2-16-6-24v-6c6 1 14 0 20-9 8-12 2-26-12-26C90 14 76 8 60 8z" fill="rgba(0,0,0,.12)" stroke="#fff" stroke-width="4" stroke-linejoin="round" />
+            <path d="M60 104v34M43 121h34" stroke="#fff" stroke-width="8" stroke-linecap="round" />
+          </svg>
+          <span>Local player 2</span>
+        </button>
+        <div class="p2ui hidden">
+          <div class="p2tag">Player 2</div>
+          <div class="arrows">
+            <button class="round-btn mini" data-action="prev2" aria-label="Previous chef for player 2"></button>
+            <button class="round-btn mini" data-action="next2" aria-label="Next chef for player 2"></button>
+          </div>
+          <button class="leave" data-action="leave">Remove</button>
+          <div class="keys">P1 WASD + Space · P2 Arrows + Enter</div>
+        </div>
+      </div>
+    </section>
+
+    <section id="stages" class="hidden">
+      <div class="stage-head">
+        <div class="banner"><span class="burger-ico"></span>PICK A STAGE</div>
+        <div class="banner sub"><span class="stage-sub"></span></div>
+      </div>
+      <div class="stage-players"></div>
+      <div class="stage-cards"></div>
+      <div class="stage-foot">
+        <button class="btn teal small" data-action="stage-back">Back</button>
+        <span>← → to browse · Enter to play</span>
+      </div>
+    </section>
+
+    <section id="hud" class="hidden">
+      <div class="vs-side left"><img alt="" /></div>
+      <div class="vs-side right"><img alt="" /></div>
+      <div class="plaque">
+        <div class="cash"><span class="cash-ico"></span><b class="money">$0</b></div>
+        <div class="hearts"></div>
+      </div>
+      <div class="vsbar">
+        <div class="side red"><img alt="" /><b class="m1">$0</b><span class="n1"></span></div>
+        <div class="timer"><b>90</b></div>
+        <div class="side teal"><span class="n2"></span><b class="m2">$0</b><img alt="" /></div>
+      </div>
+      <div class="toast"></div>
+      <button class="btn teal quit" data-action="quit">Quit</button>
+    </section>
+
+    <div class="corner">
+      <button class="btn teal" data-action="help">Help</button>
+      <button class="round-btn sound" data-action="sound" aria-label="Toggle sound"></button>
+    </div>
+
+    <div id="touch" class="hidden">
+      <div class="stick"><div class="knob"></div></div>
+      <button class="act" aria-label="Interact">✋</button>
+    </div>
+
+    <div id="modal" class="hidden"><div class="panel"></div></div>
+
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>
