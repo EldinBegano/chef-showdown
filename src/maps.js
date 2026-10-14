@@ -2,10 +2,10 @@ import * as THREE from 'three';
 import { mat, glow, mesh, rbox, cyl, sph, dome, torus, cone, put, canvasTexture, texMat, buildDish } from './models.js';
 
 export const KITCHEN = {
-  minX: -2.65,
-  maxX: 2.65,
-  minZ: -1.95,
-  maxZ: 2.35,
+  minX: -2.72,
+  maxX: 2.72,
+  minZ: -2.02,
+  maxZ: 2.42,
   pitX: 3.0,
   pitBack: -2.3,
   pitFront: 2.7,

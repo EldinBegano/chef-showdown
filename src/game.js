@@ -14,6 +14,13 @@ export const TEAM_COLORS = [
 ];
 export const RUSH_MAX = 5;
 const REACH = 1.05;
+// interaction faces: how wide a station/customer is along its counter, how far away it still counts
+const FACE_HALF = 0.55;
+const SEAT_HALF = 0.62;
+const FACE_REACH = 0.75;
+// how much a better-scoring neighbour must win by before the highlight switches
+const TARGET_STICK = 0.12;
+const SEP = 0.62;
 const SPEED = 4.4;
 const tmp = new THREE.Vector3();
 const r2 = (v) => Math.round(v * 100) / 100;
@@ -304,8 +311,13 @@ export class Game {
     const k = Math.min(1, dt * 14);
     p.vel.x += (input.x * speed - p.vel.x) * k;
     p.vel.y += (input.z * speed - p.vel.y) * k;
-    p.pos.x = THREE.MathUtils.clamp(p.pos.x + p.vel.x * dt, KITCHEN.minX, KITCHEN.maxX);
-    p.pos.z = THREE.MathUtils.clamp(p.pos.z + p.vel.y * dt, KITCHEN.minZ, KITCHEN.maxZ);
+    const nx = p.pos.x + p.vel.x * dt;
+    const nz = p.pos.z + p.vel.y * dt;
+    p.pos.x = THREE.MathUtils.clamp(nx, KITCHEN.minX, KITCHEN.maxX);
+    p.pos.z = THREE.MathUtils.clamp(nz, KITCHEN.minZ, KITCHEN.maxZ);
+    // drop speed into the counter so sliding along it (or turning out of a corner) responds at once
+    if (p.pos.x !== nx) p.vel.x = 0;
+    if (p.pos.z !== nz) p.vel.y = 0;
     if (Math.hypot(input.x, input.z) > 0.2) p.facing = angleLerp(p.facing, Math.atan2(input.x, input.z), Math.min(1, dt * 16));
     else if (Number.isFinite(p.faceTo)) p.facing = angleLerp(p.facing, p.faceTo, Math.min(1, dt * 16));
     p.root.rotation.y = p.facing;
@@ -452,31 +464,48 @@ export class Game {
     }
   }
 
+  // Each station/customer is a stretch of counter, not a point: stand anywhere along it to use it.
+  // Facing only breaks ties (e.g. in a corner between two stations).
+  targetScore(p, target) {
+    let cx, cz, tx, tz, nx, nz, half;
+    if (target.type === 'seat') {
+      [cx, cz, tx, tz, nx, nz, half] = [target.seat.ip.x, target.seat.ip.z, 1, 0, 0, -1, SEAT_HALF];
+    } else {
+      const { st } = target;
+      const side = st.cfg.side;
+      if (st.cfg.kind === 'belt') [cx, cz, tx, tz, nx, nz, half] = [0, KITCHEN.maxZ, 1, 0, 0, 1, KITCHEN.maxX + 0.3];
+      else if (side === 'front') [cx, cz, tx, tz, nx, nz, half] = [st.ip.x, st.ip.z, 1, 0, 0, 1, FACE_HALF];
+      else [cx, cz, tx, tz, nx, nz, half] = [st.ip.x, st.ip.z, 0, 1, side === 'left' ? -1 : 1, 0, FACE_HALF];
+    }
+    const rx = p.pos.x - cx;
+    const rz = p.pos.z - cz;
+    const along = Math.max(0, Math.abs(rx * tx + rz * tz) - half);
+    const d = Math.hypot(along, rx * nx + rz * nz);
+    if (d > FACE_REACH) return Infinity;
+    const align = Math.sin(p.facing) * nx + Math.cos(p.facing) * nz;
+    return d + 0.2 * (1 - align);
+  }
+
   findTarget(p) {
-    const probeX = p.pos.x + Math.sin(p.facing) * 0.45;
-    const probeZ = p.pos.z + Math.cos(p.facing) * 0.45;
     if (p.botTarget) {
       const ip = p.botTarget.type === 'seat' ? p.botTarget.seat.ip : this.ipFor(p.botTarget.st, p.pos.x);
       if (Math.hypot(ip.x - p.pos.x, ip.z - p.pos.z) < REACH * 0.8) return p.botTarget;
     }
+    const cands = this.stations.map((st) => ({ type: 'station', st }));
+    for (const seat of this.seats) if (seat.customer?.state === 'waiting') cands.push({ type: 'seat', seat });
     let best = null;
-    let bd = REACH;
-    for (const st of this.stations) {
-      const ip = this.ipFor(st, probeX);
-      const d = Math.hypot(ip.x - probeX, ip.z - probeZ);
-      if (d < bd) {
-        bd = d;
-        best = { type: 'station', st };
+    let bs = Infinity;
+    let keep = Infinity;
+    for (const c of cands) {
+      const sc = this.targetScore(p, c);
+      if (sc < bs) {
+        bs = sc;
+        best = c;
       }
+      if (p.target && (c.st ? c.st === p.target.st : c.seat === p.target.seat)) keep = sc;
     }
-    for (const seat of this.seats) {
-      if (seat.customer?.state !== 'waiting') continue;
-      const d = Math.hypot(seat.ip.x - probeX, seat.ip.z - probeZ) * 0.9;
-      if (d < bd) {
-        bd = d;
-        best = { type: 'seat', seat };
-      }
-    }
+    // hysteresis: stay on the current target unless something is clearly closer
+    if (keep < Infinity && keep <= bs + TARGET_STICK) return p.target;
     return best;
   }
 
@@ -876,15 +905,20 @@ export class Game {
         const dz = b.z - a.z;
         const d = Math.hypot(dx, dz);
         if (ps[i].gone || ps[j].gone) continue;
-        if (d > 0 && d < 0.75) {
+        if (d > 0 && d < SEP) {
           const fa = ps[i].local || ps[i].bot ? 1 : 0;
           const fb = ps[j].local || ps[j].bot ? 1 : 0;
           if (!fa && !fb) continue;
-          const push = (0.75 - d) / (fa + fb);
+          // soft push (half the overlap per frame) so chefs can squeeze past each other
+          const push = (0.5 * (SEP - d)) / (fa + fb);
           a.x -= (dx / d) * push * fa;
           a.z -= (dz / d) * push * fa;
           b.x += (dx / d) * push * fb;
           b.z += (dz / d) * push * fb;
+          for (const q of [a, b]) {
+            q.x = THREE.MathUtils.clamp(q.x, KITCHEN.minX, KITCHEN.maxX);
+            q.z = THREE.MathUtils.clamp(q.z, KITCHEN.minZ, KITCHEN.maxZ);
+          }
         }
       }
   }
@@ -1199,9 +1233,9 @@ export class Game {
         const dx = me.pos.x - o.pos.x;
         const dz = me.pos.z - o.pos.z;
         const d = Math.hypot(dx, dz);
-        if (d > 0 && d < 0.75) {
-          me.pos.x = THREE.MathUtils.clamp(me.pos.x + (dx / d) * (0.75 - d), KITCHEN.minX, KITCHEN.maxX);
-          me.pos.z = THREE.MathUtils.clamp(me.pos.z + (dz / d) * (0.75 - d), KITCHEN.minZ, KITCHEN.maxZ);
+        if (d > 0 && d < SEP) {
+          me.pos.x = THREE.MathUtils.clamp(me.pos.x + (dx / d) * 0.5 * (SEP - d), KITCHEN.minX, KITCHEN.maxX);
+          me.pos.z = THREE.MathUtils.clamp(me.pos.z + (dz / d) * 0.5 * (SEP - d), KITCHEN.minZ, KITCHEN.maxZ);
         }
       }
       me.target = this.findTarget(me);
