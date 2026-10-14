@@ -1,13 +1,13 @@
 import * as THREE from 'three';
 import { CHARACTERS, buildCharacter, poseIdle, buildLobbyStage } from './models.js';
-import { Game, PLAYER_COLORS } from './game.js';
+import { Game, PLAYER_COLORS, RUSH_MAX } from './game.js';
 import { Bot } from './bot.js';
 import { LEVELS, LEVEL_ORDER, MODES, COMP_NAMES } from './levels.js';
 import { Keyboard, Touch, makeController, CONTROL_IDS, CONTROL_LABELS, connectedPads, padJoinPresses } from './input.js';
 import { Net } from './net.js';
-import { sfx } from './audio.js';
+import { sfx, music } from './audio.js';
 import { save, levelFromXp, xpForLevel, board, submitScore } from './save.js';
-import { dishIcon, UI_ICONS, BURGER_LOGO } from './icons.js';
+import { dishIcon, stepIcon, UI_ICONS, BURGER_LOGO } from './icons.js';
 
 const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];
@@ -370,6 +370,7 @@ function cycleP1(dir) {
 
 function showLobby() {
   state.screen = 'lobby';
+  music.play('lobby');
   document.body.classList.add('in-lobby');
   $('#lobby').classList.remove('hidden');
   $('#hud').classList.add('hidden');
@@ -494,6 +495,10 @@ function launchGame(modeId, levelId, players, net) {
       $(t ? '.n2' : '.n1').textContent = members.map((p) => p.name).join(' & ');
     }
   renderHearts();
+  state.menuKey = '';
+  state.rushShown = 0;
+  $('.recipe-card').classList.toggle('collapsed', !!save.data.recipesHidden);
+  music.play(levelId);
   closeModal();
   document.activeElement?.blur();
 }
@@ -762,17 +767,64 @@ function onEvent(type, data) {
     void m.offsetWidth;
     m.classList.add('bump');
   } else if (type === 'unlock') {
+    const lv = state.game.level;
     const t = $('.toast');
-    t.innerHTML = data.map((d) => `<div class="ico">${dishIcon(d.id)}</div>`).join('') + `<div><small>NEW ON THE MENU</small>${escapeHtml(data.map((d) => d.name).join(' & '))}</div>`;
+    t.innerHTML = data.map((d) => `<div class="ico">${dishIcon(d.id)}</div>`).join('') + `<div><small>NEW ON THE MENU</small>${escapeHtml(data.map((d) => d.name).join(' & '))}${data.map((d) => `<div class="toast-steps">${recipeSteps(lv, d.id)}</div>`).join('')}</div>`;
     t.classList.add('show');
     clearTimeout(toastTimer);
-    toastTimer = setTimeout(() => t.classList.remove('show'), 3200);
+    toastTimer = setTimeout(() => t.classList.remove('show'), 4200);
+    state.freshUntil = performance.now() + 8000;
+    state.freshIds = data.map((d) => d.id);
+    state.menuKey = '';
+  } else if (type === 'rush') {
+    music.setTempo(1 + 0.05 * (data - 1));
+    const b = $('.rush-banner');
+    b.innerHTML = `<small>${data >= RUSH_MAX ? 'MAX RUSH' : 'RUSH HOUR'}</small>Level ${data}<span>Hungrier customers, less patience</span>`;
+    b.classList.remove('show');
+    void b.offsetWidth;
+    b.classList.add('show');
   }
+}
+
+/* ---------- recipes ---------- */
+
+function stepName(lv, s) {
+  return lv.stations.find((st) => st.gives === s)?.name || (COMP_NAMES[s] ? `${COMP_NAMES[s]} (belt)` : s);
+}
+
+// Ingredient icons joined by "+", or "from <station>" for things that come out of a station finished.
+function recipeSteps(lv, id) {
+  const steps = lv.menu[id].steps;
+  if (steps.length === 1) return `<span class="from">from <b>${escapeHtml(stepName(lv, steps[0]))}</b></span>`;
+  return steps.map((s) => `<span class="step" title="${escapeHtml(stepName(lv, s))}">${stepIcon(s)}</span>`).join('<i>+</i>');
+}
+
+function renderRecipeCard(g) {
+  const fresh = performance.now() < (state.freshUntil || 0) ? state.freshIds || [] : [];
+  const key = g.menuIds.join() + '|' + fresh.join();
+  if (key === state.menuKey) return;
+  state.menuKey = key;
+  $('.recipe-card .rc-list').innerHTML = g.menuIds
+    .map((id) => `<div class="rc-row ${fresh.includes(id) ? 'new' : ''}"><span class="dish" title="${escapeHtml(g.level.menu[id].name)}">${dishIcon(id)}</span><i>=</i>${recipeSteps(g.level, id)}</div>`)
+    .join('');
+}
+
+function toggleRecipes() {
+  save.data.recipesHidden = !save.data.recipesHidden;
+  save.write();
+  $('.recipe-card').classList.toggle('collapsed', save.data.recipesHidden);
 }
 
 function updateHud() {
   const g = state.game;
   if (!g) return;
+  renderRecipeCard(g);
+  const rush = g.rushLevel;
+  if (rush !== state.rushShown) {
+    state.rushShown = rush;
+    $('.rush-meter').innerHTML = `<small>RUSH</small>${Array.from({ length: RUSH_MAX }, (_, i) => `<i class="${i < rush ? 'on' : ''}"></i>`).join('')}`;
+    $('.rush-meter').dataset.level = rush;
+  }
   if (g.mode.id === 'score') {
     if (g.money !== state.lastMoney) {
       state.lastMoney = g.money;
@@ -826,6 +878,7 @@ function endGame(raw) {
   const after = levelFromXp(save.data.xp);
   const newChars = CHARACTERS.filter((c) => c.level > before && c.level <= after.level);
   (r.mode === 'versus' && teamSum(r.players[me].team) >= teamSum(1 - r.players[me].team) ? sfx.win : sfx.end)();
+  music.play('lobby');
 
   const xpBlock = `<div class="xp-gain">+${xp} XP ${after.level > before ? `· <span style="color:#b0124f">LEVEL UP! Level ${after.level}</span>` : `· Level ${after.level}`}
     <div class="xpbar"><i style="width:${(after.into / after.need) * 100}%"></i></div>
@@ -897,7 +950,7 @@ function helpHtml(levelId) {
     .map((l) => `<button class="pill ${l.id === levelId ? 'on' : ''}" data-action="helptab" data-level="${l.id}">${l.name}</button>`)
     .join('');
   const recipes = Object.entries(lv.menu)
-    .map(([id, m]) => `<div class="recipe"><div class="ico">${dishIcon(id)}</div><div><b>${m.name}</b><small>${m.steps.map((s) => lv.stations.find((st) => st.gives === s)?.name || (COMP_NAMES[s] ? `${COMP_NAMES[s]} (belt)` : s)).join(' → ')}</small></div><span class="price">$${m.price}</span></div>`)
+    .map(([id, m]) => `<div class="recipe"><div class="ico">${dishIcon(id)}</div><div><b>${m.name}</b><small>${m.steps.map((s) => stepName(lv, s)).join(' → ')}</small>${m.steps.length > 1 ? `<div class="help-steps">${recipeSteps(lv, id)}</div>` : ''}</div><span class="price">$${m.price}</span></div>`)
     .join('');
   return `<header class="teal">How to Play</header><div class="body">
     <ol>
@@ -909,6 +962,8 @@ function helpHtml(levelId) {
       <li>Serve customers at the counter before their patience runs out. Faster service means bigger tips.</li>
       <li>Set a tray down on a spare <b>plate</b> to prep ahead or park food nobody needs yet, then pick it up later.</li>
       <li>Messed up? Toss the whole tray in the <b>recycle bin</b>.</li>
+      <li>The <b>recipe card</b> in the top-left shows what goes into every dish on today's menu. Press <kbd>R</kbd> to hide or show it.</li>
+      <li>The longer the shift runs, the busier it gets: every <b>Rush</b> level brings hungrier, less patient customers.</li>
     </ol>
     <h3>Menu</h3><div class="tabs">${tabs}</div><div class="recipes">${recipes}</div>
     <h3>Controls</h3>
@@ -1031,9 +1086,13 @@ document.addEventListener('click', (e) => {
       return closeModal();
     case 'sound':
       sfx.enabled = !sfx.enabled;
+      sfx.unlock();
       save.data.sound = sfx.enabled;
       save.write();
       return updateSoundBtn();
+    case 'recipes':
+      toggleRecipes();
+      return b.blur();
   }
 });
 
@@ -1043,6 +1102,7 @@ addEventListener('keydown', (e) => {
     if (modalOpen()) modalClosable && closeModal();
     else if (state.screen === 'game') openHelp();
   }
+  if (e.code === 'KeyR' && state.screen === 'game' && !modalOpen() && !e.repeat) toggleRecipes();
   if (state.screen === 'lobby' && !modalOpen() && !(e.target instanceof HTMLInputElement)) {
     if (e.code === 'ArrowLeft' || e.code === 'KeyA') cycleP1(-1);
     if (e.code === 'ArrowRight' || e.code === 'KeyD') cycleP1(1);

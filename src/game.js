@@ -12,6 +12,7 @@ export const TEAM_COLORS = [
   ['#ff5246', '#ffa23c'],
   ['#3fd8f3', '#5cf0b4'],
 ];
+export const RUSH_MAX = 5;
 const REACH = 1.05;
 const SPEED = 4.4;
 const tmp = new THREE.Vector3();
@@ -63,6 +64,7 @@ export class Game {
     this.served = 0;
     this.lost = 0;
     this.unlockIdx = 1;
+    this.rush = 1;
     this.menuIds = [...this.level.unlocks[0].dishes];
     this.floaters = [];
     this.overlay.innerHTML = '';
@@ -213,6 +215,7 @@ export class Game {
         if (this.timeLeft <= 0) this.finish();
       }
       this.checkUnlocks();
+      this.checkRush();
     }
 
     for (const p of this.players) this.updatePlayer(p, dt, playing);
@@ -259,6 +262,23 @@ export class Game {
       this.play('unlockDish');
       this.event('unlock', u.dishes.map((d) => ({ id: d, name: this.level.menu[d].name })));
     }
+  }
+
+  // 0 at the start of a shift, 1 at full rush: five minutes into Score Attack, or the end of the Versus clock.
+  get heat() {
+    return Math.min(1, this.elapsed / (this.mode.duration || 300));
+  }
+
+  get rushLevel() {
+    return Math.min(RUSH_MAX, 1 + Math.floor(this.heat * RUSH_MAX));
+  }
+
+  checkRush() {
+    const lv = this.rushLevel;
+    if (lv <= this.rush) return;
+    this.rush = lv;
+    this.play('rush');
+    this.event('rush', lv);
   }
 
   finish() {
@@ -661,15 +681,23 @@ export class Game {
   }
 
   orderSize() {
-    const e = this.elapsed;
-    if (this.mode.id === 'score') {
-      const p3 = e > 140 ? Math.min(0.22, (e - 140) / 500) : 0;
-      const p2 = Math.min(0.55, 0.1 + e / 260);
-      const r = Math.random();
-      return r < p3 ? 3 : r < p3 + p2 ? 2 : 1;
-    }
+    const h = this.heat;
+    const score = this.mode.id === 'score';
+    const p3 = score ? Math.max(0, h - 0.45) * 0.45 : 0.04 + 0.12 * h;
+    const p2 = score ? 0.1 + 0.5 * h : 0.25 + 0.25 * h;
     const r = Math.random();
-    return r < 0.08 ? 3 : r < 0.4 ? 2 : 1;
+    return r < p3 ? 3 : r < p3 + p2 ? 2 : 1;
+  }
+
+  // Patience and the gap between customers shrink as the rush heats up.
+  basePatience() {
+    const h = this.heat;
+    return (this.mode.id === 'score' ? 44 - 20 * h : 40 - 12 * h) * (1 - 0.05 * (this.crew - 1));
+  }
+
+  seatCooldown() {
+    const h = this.heat;
+    return (this.mode.id === 'score' ? 5 - 3.9 * Math.sqrt(h) : 2 - 1.1 * h) / (1 + 0.3 * (this.crew - 1));
   }
 
   spawnCustomer(seat) {
@@ -681,8 +709,7 @@ export class Game {
     }
     const total = order.reduce((s, id) => s + this.level.menu[id].price, 0);
     const side = seat.x <= 0 ? -1 : 1;
-    const base = (this.mode.id === 'score' ? Math.max(24, 44 - this.elapsed * 0.07) : 38) * (1 - 0.05 * (this.crew - 1));
-    const maxPatience = base + (n - 1) * 13;
+    const maxPatience = this.basePatience() + (n - 1) * 13;
     const c = this.makeCustomer(seat, ++this.uid, Math.floor(Math.random() * 2 ** 31), side * 9, KITCHEN.customerZ - 1.0);
     Object.assign(c, {
       order, remaining: [...order], total,
@@ -737,8 +764,7 @@ export class Game {
             this.scene.remove(c.root);
             c.bubble.remove();
             seat.customer = null;
-            const base = (this.mode.id === 'score' ? Math.max(1.2, 5 - this.elapsed * 0.022) : 1.4) / (1 + 0.3 * (this.crew - 1));
-            seat.cooldown = base + rand(0, 2.5);
+            seat.cooldown = this.seatCooldown() + rand(0, 2.5 - 1.2 * this.heat);
             continue;
           }
         }

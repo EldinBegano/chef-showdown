@@ -1788,12 +1788,17 @@ function onigiri() {
   return g;
 }
 
+// Filling shape matches the order icons: square tamago/tuna, round striped salmon, seeded cucumber.
 function maki(center) {
   const g = group(plate());
+  const t = TOPPINGS[center] || TOPPINGS.salmon;
   for (const x of [-0.045, 0.045]) {
     g.add(mesh(cyl(0.045, 0.045, 0.06, 16), '#1d3324', x, 0.055, 0));
     g.add(mesh(cyl(0.037, 0.037, 0.062, 16), '#fbfaf5', x, 0.055, 0));
-    g.add(mesh(cyl(0.016, 0.016, 0.064, 10), (TOPPINGS[center] || TOPPINGS.salmon).color, x, 0.055, 0));
+    if (center === 'tamago' || center === 'tuna') g.add(mesh(rbox(0.036, 0.064, 0.036, 0.004), t.color, x, 0.055, 0));
+    else g.add(mesh(cyl(0.021, 0.021, 0.064, 12), t.color, x, 0.055, 0));
+    if (center === 'salmon') g.add(mesh(rbox(0.006, 0.0655, 0.03, 0.002), t.stripe, x, 0.055, 0));
+    if (center === 'cucumber') g.add(mesh(cyl(0.013, 0.013, 0.066, 10), '#bfe39a', x, 0.055, 0));
   }
   return g;
 }
@@ -1856,10 +1861,12 @@ function sacherSlice(cream) {
   wedge(0.1, 0.035, 0.085, '#5a3220');
   wedge(0.102, 0.012, 0.108, '#2a140a');
   if (cream) {
-    const d = mesh(sph(0.035, 10, 8), '#fffaf2', 0.06, 0.04, 0.05);
-    d.scale.y = 0.8;
+    // big dollop so "mit Schlag" reads at a glance on the tray
+    const d = mesh(sph(0.05, 14, 10), '#fffaf2', 0.055, 0.05, 0.045);
+    d.scale.y = 0.85;
     g.add(d);
-    g.add(mesh(cone(0.012, 0.03, 8), '#fffaf2', 0.06, 0.075, 0.05));
+    g.add(mesh(sph(0.032, 12, 8), '#fffaf2', 0.055, 0.1, 0.045));
+    g.add(mesh(cone(0.016, 0.04, 10), '#fffaf2', 0.055, 0.14, 0.045));
   }
   return g;
 }

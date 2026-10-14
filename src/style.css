@@ -1523,6 +1523,262 @@ body.in-lobby #vignette {
 }
 
 
+.rc-row svg,
+.toast-steps svg,
+.help-steps svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.toast-steps {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin-top: 2px;
+  font-size: 14px;
+}
+
+.toast-steps .step,
+.help-steps .step {
+  width: 28px;
+  height: 28px;
+}
+
+.toast-steps .from,
+.help-steps .from {
+  font-family: var(--body);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.help-steps {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin-top: 2px;
+}
+
+.toast-steps i,
+.help-steps i {
+  font-style: normal;
+  font-weight: 700;
+  color: #8a5a1e;
+}
+
+/* recipe card: what goes into each dish on the current menu */
+.recipe-card {
+  position: absolute;
+  top: 14px;
+  left: 14px;
+  max-height: 32vh;
+  overflow: hidden;
+  background: rgba(252, 232, 195, 0.94);
+  color: var(--ink);
+  border: 3px solid #8a5a1e;
+  border-radius: 12px;
+  box-shadow: 0 5px 0 rgba(0, 0, 0, 0.3);
+  display: flex;
+  flex-direction: column;
+}
+
+#hud .rc-head {
+  font-family: var(--display);
+  font-size: 16px;
+  color: #fff;
+  background: #8a5a1e;
+  border: 0;
+  padding: 3px 10px 5px;
+  text-align: left;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.rc-head kbd {
+  font-size: 11px;
+  padding: 0 4px;
+  border-width: 1px 1px 2px;
+  color: var(--ink);
+}
+
+.recipe-card.collapsed .rc-list {
+  display: none;
+}
+
+.rc-list {
+  padding: 4px 8px 6px;
+  overflow-y: auto;
+}
+
+.rc-row {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 1px 4px;
+  border-radius: 8px;
+}
+
+.rc-row .dish {
+  width: 44px;
+  height: 38px;
+  flex: none;
+}
+
+.rc-row .step {
+  width: 30px;
+  height: 30px;
+  flex: none;
+}
+
+.rc-row i {
+  font-style: normal;
+  font-family: var(--display);
+  color: #8a5a1e;
+  padding: 0 1px;
+}
+
+.rc-row .from {
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.rc-row.new {
+  background: #ffd36b;
+  animation: rc-flash 0.6s 4;
+}
+
+@keyframes rc-flash {
+  50% {
+    background: #fff3c4;
+  }
+}
+
+/* rush: difficulty level that climbs over the shift */
+.rush-meter {
+  position: absolute;
+  top: 74px;
+  right: 16px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: rgba(42, 20, 8, 0.72);
+  border-radius: 999px;
+  padding: 4px 10px;
+}
+
+.rush-meter small {
+  font-family: var(--display);
+  font-size: 13px;
+  color: #ffd36b;
+  margin-right: 2px;
+}
+
+.rush-meter i {
+  width: 12px;
+  height: 16px;
+  border-radius: 50% 50% 45% 45% / 60% 60% 40% 40%;
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.rush-meter i.on {
+  background: linear-gradient(#ffe066, #ff7a1a 60%, #e2402f);
+  box-shadow: 0 0 6px rgba(255, 140, 40, 0.8);
+}
+
+.rush-meter[data-level='5'] i.on {
+  animation: rush-flicker 0.5s infinite alternate;
+}
+
+@keyframes rush-flicker {
+  to {
+    filter: brightness(1.35);
+    transform: scaleY(1.12);
+  }
+}
+
+.rush-banner {
+  position: absolute;
+  top: 24%;
+  left: 50%;
+  transform: translateX(-50%);
+  text-align: center;
+  font-family: var(--display);
+  font-size: 44px;
+  color: #fff;
+  -webkit-text-stroke: 6px #8a1a10;
+  paint-order: stroke fill;
+  opacity: 0;
+  pointer-events: none;
+  white-space: nowrap;
+}
+
+.rush-banner small {
+  display: block;
+  font-size: 24px;
+  color: #ffd36b;
+}
+
+.rush-banner span {
+  display: block;
+  font-family: var(--body);
+  font-weight: 700;
+  font-size: 15px;
+  -webkit-text-stroke: 0;
+  color: #fff;
+  text-shadow: 0 2px 3px rgba(0, 0, 0, 0.6);
+}
+
+.rush-banner.show {
+  animation: rush-in 2.6s ease-out;
+}
+
+@keyframes rush-in {
+  0% {
+    opacity: 0;
+    transform: translateX(-50%) scale(0.5);
+  }
+  12% {
+    opacity: 1;
+    transform: translateX(-50%) scale(1.12);
+  }
+  20%,
+  80% {
+    opacity: 1;
+    transform: translateX(-50%) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translateX(-50%) translateY(-20px);
+  }
+}
+
+@media (max-width: 700px) {
+  .recipe-card {
+    top: 8px;
+    left: 8px;
+    max-height: 28vh;
+  }
+  .rc-row .dish {
+    width: 30px;
+    height: 27px;
+  }
+  .rc-row .step {
+    width: 20px;
+    height: 20px;
+  }
+  .rush-meter {
+    top: 62px;
+    right: 8px;
+  }
+  .rush-banner {
+    font-size: 32px;
+  }
+}
+
 /* ---------- touch ---------- */
 
 #touch {
