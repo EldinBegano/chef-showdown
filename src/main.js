@@ -237,7 +237,9 @@ function refreshLobby() {
     b.style.opacity = locked ? 0.5 : 1;
   });
 
-  const upcoming = CHARACTERS.filter((c) => !isUnlocked(c)).slice(0, 2);
+  const upcoming = CHARACTERS.filter((c) => !isUnlocked(c))
+    .sort((a, b) => a.level - b.level)
+    .slice(0, 2);
   const shown = upcoming.length ? upcoming : CHARACTERS.slice(-2);
   $('.tiles').innerHTML = shown
     .map((c) => `<div class="tile ${c.tier} ${isUnlocked(c) ? '' : 'locked'}"><img src="${portraits[c.id]}" alt="${c.name}"><span class="tier ${c.tier}">${c.tier === 'gold' ? 'GOLD' : 'FREE'} · LV ${c.level}</span></div>`)

@@ -590,6 +590,39 @@ function paintMouth(c, x, y, kind, o) {
     c.moveTo(x - mw, y - 3);
     c.quadraticCurveTo(x, y + 10, x + mw, y - 3);
     c.stroke();
+  } else if (kind === 'smirk') {
+    c.beginPath();
+    c.moveTo(x - mw * 0.8, y + 2);
+    c.quadraticCurveTo(x + mw * 0.2, y + 8, x + mw, y - 6);
+    c.stroke();
+  } else if (kind === 'grin') {
+    // wide smile showing the top row of teeth
+    const path = () => {
+      c.beginPath();
+      c.moveTo(x - mw, y - 4);
+      c.quadraticCurveTo(x, y + 2, x + mw, y - 4);
+      c.quadraticCurveTo(x + mw * 0.8, y + 18, x, y + 19);
+      c.quadraticCurveTo(x - mw * 0.8, y + 18, x - mw, y - 4);
+    };
+    c.fillStyle = o.mouthIn || '#5a1a1a';
+    path();
+    c.fill();
+    c.save();
+    c.clip();
+    c.fillStyle = '#fbf7ee';
+    c.fillRect(x - mw, y - 8, mw * 2, 14);
+    c.strokeStyle = 'rgba(0,0,0,0.15)';
+    c.lineWidth = 1.5;
+    for (let k = -3; k <= 3; k++) {
+      c.beginPath();
+      c.moveTo(x + k * mw * 0.24, y - 4);
+      c.lineTo(x + k * mw * 0.24, y + 5);
+      c.stroke();
+    }
+    c.restore();
+    c.lineWidth = 3;
+    path();
+    c.stroke();
   } else if (kind === 'flat') {
     c.lineWidth = 4;
     c.beginPath();
@@ -649,6 +682,16 @@ function paintFace(c, expr, o) {
       }
     }
     paintEye(c, cx, o.eyeY, side, expr, o);
+    if (o.shadow) {
+      // eyeshadow goes behind what's already painted
+      c.save();
+      c.globalCompositeOperation = 'destination-over';
+      c.fillStyle = o.shadow;
+      c.beginPath();
+      c.ellipse(cx, o.eyeY - o.eh * 0.45, o.ew * 1.25, o.eh * 0.7, 0, 0, TAU);
+      c.fill();
+      c.restore();
+    }
     if (o.brow) {
       const inner = -side;
       const by = o.browY + (happy ? -6 : 0);
@@ -853,6 +896,760 @@ const petalGeo = cached('petal', () => {
   return g;
 });
 
+/* ---------- builders shared by skins and their level-up variants ---------- */
+
+// Vocal-synth idol body (Miku, Teto): bare shoulders, tie, detached sleeves, pleated skirt, stockings and boots.
+function idolBase({ key, skin, shirt, skirt, accent, accentDark, tie = accent, black, badge }) {
+  const h = humanoid({
+    skin,
+    slim: true,
+    fabric: false,
+    outfitKey: key,
+    outfit: (c, w, hgt) => {
+      c.fillStyle = shirt;
+      c.fillRect(0, 0, w, hgt);
+      c.fillStyle = skin;
+      for (const x of [w * 0.25, w * 0.75]) {
+        c.beginPath();
+        c.ellipse(x, 0, 70, 62, 0, 0, Math.PI * 2);
+        c.fill();
+      }
+      c.fillStyle = skirt;
+      c.fillRect(w / 2 - 62, 0, 124, 26);
+      c.fillStyle = accent;
+      c.fillRect(w / 2 - 62, 24, 124, 5);
+      c.fillStyle = tie;
+      c.beginPath();
+      c.moveTo(w / 2 - 13, 26);
+      c.lineTo(w / 2 + 13, 26);
+      c.lineTo(w / 2 + 17, hgt - 18);
+      c.lineTo(w / 2, hgt);
+      c.lineTo(w / 2 - 17, hgt - 18);
+      c.fill();
+      c.fillStyle = accentDark;
+      c.fillRect(w / 2 - 15, 24, 30, 18);
+      if (badge) {
+        c.fillStyle = badge;
+        c.fillRect(w / 2 - 100, 78, 46, 10);
+      }
+      c.strokeStyle = 'rgba(0,0,0,0.08)';
+      c.lineWidth = 3;
+      c.beginPath();
+      c.moveTo(w / 2 + 30, 40);
+      c.lineTo(w / 2 + 30, hgt);
+      c.stroke();
+    },
+    sleeves: skin,
+    forearms: black,
+    pants: skirt,
+    shoes: black,
+    sole: accent,
+    bareLegs: true,
+    calves: black,
+  });
+  const { head, body, armL, armR, elbowL, elbowR, legL, legR } = h.rig;
+
+  const pleats = canvasTexture(256, 64, (c, w, hh) => {
+    c.fillStyle = skirt;
+    c.fillRect(0, 0, w, hh);
+    for (let x = 0; x < w; x += 16) {
+      c.fillStyle = 'rgba(0,0,0,0.28)';
+      c.fillRect(x, 0, 4, hh);
+      c.fillStyle = 'rgba(255,255,255,0.06)';
+      c.fillRect(x + 4, 0, 3, hh);
+    }
+    c.fillStyle = accent;
+    c.fillRect(0, hh - 7, w, 7);
+  });
+  const skirtMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.19, 0.32, 0.25, 32, 1, true), texMat(pleats, { side: THREE.DoubleSide }));
+  skirtMesh.position.y = 0.55;
+  skirtMesh.castShadow = true;
+  body.add(skirtMesh);
+
+  for (const arm of [armL, armR]) {
+    arm.add(mesh(capsule(0.058, 0.06), black, 0, -0.2, 0));
+    arm.add(mesh(cyl(0.062, 0.062, 0.025, 16), accent, 0, -0.15, 0));
+  }
+  for (const elbow of [elbowL, elbowR]) {
+    elbow.children[0].visible = false;
+    elbow.add(mesh(cyl(0.06, 0.1, 0.25, 20), black, 0, -0.13, 0));
+    elbow.add(mesh(cyl(0.102, 0.102, 0.03, 20), accent, 0, -0.255, 0));
+    elbow.children[1].position.y = -0.3;
+  }
+  for (const leg of [legL, legR]) {
+    leg.add(mesh(capsule(0.066, 0.1), black, 0, -0.25, 0.005));
+    leg.add(mesh(cyl(0.07, 0.07, 0.03, 16), accent, 0, -0.19, 0.005));
+  }
+
+  head.children[0].material = mat(skin, { emissive: skin, emissiveIntensity: 0.22 });
+  head.scale.setScalar(1.04);
+  return h;
+}
+
+// Idol hair mass: crown, back, fringe, bangs and the two locks that frame the face.
+function idolHair(head, hair) {
+  const cap = mesh(dome(0.296), hair, 0, 0.03, -0.015);
+  cap.scale.set(1, 1.05, 1.06);
+  cap.rotation.x = -0.08;
+  head.add(cap);
+  head.add(mesh(sph(0.285, 24, 16), hair, 0, -0.02, -0.065));
+  const fringe = new THREE.Mesh(new THREE.SphereGeometry(0.305, 32, 12, Math.PI / 2 - 1.15, 2.3, 0, 1.12), mat(hair));
+  fringe.castShadow = true;
+  head.add(fringe);
+  [[-0.225, -0.04, 0.05], [-0.15, 0.04, 0.05], [-0.075, 0.06, 0.048], [0, 0.0, 0.022], [0.075, 0.06, 0.048], [0.15, 0.04, 0.05], [0.225, -0.03, 0.05]].forEach(([x, bottom, hw]) => {
+    const yc = (0.125 + bottom) / 2;
+    const hh = (0.125 - bottom) / 2;
+    const z = Math.sqrt(Math.max(0, 0.305 * 0.305 - x * x - yc * yc)) - 0.008;
+    const clump = mesh(petalGeo, hair, x, yc, z);
+    clump.lookAt(x * 3, yc, z * 3);
+    clump.scale.set(hw / 0.06, hh / 0.06, 0.3);
+    clump.rotateZ(x * 0.8);
+    head.add(clump);
+  });
+  for (const x of [-0.235, 0.235]) {
+    const lock = mesh(capsule(0.05, 0.32), hair, x, -0.16, 0.06);
+    lock.scale.z = 0.55;
+    lock.rotation.z = x > 0 ? 0.08 : -0.08;
+    head.add(lock);
+  }
+}
+
+function buildMiku() {
+  const skin = '#fbe4d8';
+  const teal = '#3cc6cc';
+  const black = '#26272d';
+  const h = idolBase({ key: 'miku2', skin, shirt: '#c9cdd3', skirt: '#3d4248', accent: teal, accentDark: '#2a9aa2', black, badge: '#d9b44a' });
+  const { head } = h.rig;
+  idolHair(head, teal);
+
+  const tails = [];
+  for (const side of [-1, 1]) {
+    const tail = new THREE.Group();
+    tail.position.set(side * 0.24, 0.13, -0.07);
+    const pod = new THREE.Group();
+    pod.add(mesh(rbox(0.06, 0.15, 0.11, 0.02), black, 0, 0, 0));
+    pod.add(mesh(rbox(0.012, 0.15, 0.03, 0.004), '#e0408f', side * 0.03, 0, 0.025));
+    pod.add(mesh(rbox(0.012, 0.15, 0.015, 0.004), '#e0408f', side * 0.03, 0, -0.025));
+    pod.position.set(side * 0.035, 0.03, 0.01);
+    pod.rotation.z = side * -0.35;
+    tail.add(pod);
+    const geo = taperedTube(
+      [
+        [0, 0, 0],
+        [side * 0.16, -0.12, -0.05],
+        [side * 0.24, -0.45, -0.08],
+        [side * 0.22, -0.85, -0.06],
+        [side * 0.16, -1.18, -0.02],
+      ],
+      (t) => 0.05 + Math.sin(Math.min(1, t * 1.6) * Math.PI * 0.5) * 0.085 - Math.max(0, t - 0.6) * 0.3,
+      0.42,
+    );
+    const ribbon = new THREE.Mesh(geo, mat(teal));
+    ribbon.castShadow = true;
+    tail.add(ribbon);
+    head.add(tail);
+    tails.push(tail);
+  }
+  h.rig.tails = tails;
+
+  face(h.rig, 'miku', {
+    style: 'anime', eyeY: 130, gap: 70, ew: 33, eh: 42, lid: 9, lash: true,
+    iris: ['#16606a', '#2fb2ba', '#8de8e4'], pupil: '#0f3a42',
+    blush: { c: 'rgba(246,140,160,0.45)', dx: 12, y: 196, rx: 20, ry: 11 },
+    nose: 'rgba(205,120,110,0.55)', mouth: 'open', mouthY: 189, mouthW: 16, mouthIn: '#b8344a', lip: '#9a2a3e',
+  });
+  for (const side of [-1, 1]) {
+    put(head, mesh(cyl(0.065, 0.065, 0.05, 20), black, side * 0.29, -0.02, 0.0)).rotation.z = Math.PI / 2;
+    put(head, mesh(cyl(0.035, 0.035, 0.055, 14), teal, side * 0.296, -0.02, 0.0)).rotation.z = Math.PI / 2;
+  }
+  h.rig.idle = 'pose';
+  return h;
+}
+
+function buildTeto() {
+  const skin = '#fbe4d8';
+  const red = '#d8304e';
+  const redDark = '#a51e3a';
+  const black = '#232328';
+  const h = idolBase({ key: 'teto', skin, shirt: '#4b4c57', skirt: '#26272d', accent: red, accentDark: redDark, black });
+  const { rig } = h;
+  const { head, elbowR } = rig;
+  idolHair(head, red);
+
+  // twin drills: tilted rings stacked and turned a little each step read as a spiral curl
+  const tails = [];
+  for (const side of [-1, 1]) {
+    const tail = new THREE.Group();
+    tail.position.set(side * 0.25, 0.07, -0.05);
+    tail.add(mesh(sph(0.075, 14, 10), red, side * 0.015, 0.02, 0));
+    const drill = new THREE.Group();
+    drill.position.set(side * 0.05, -0.07, 0);
+    for (let i = 0; i < 6; i++) {
+      const turn = new THREE.Group();
+      turn.position.y = -i * 0.068;
+      turn.rotation.y = side * i * 1.1;
+      const ring = mesh(torus(0.078 - i * 0.009, 0.033 - i * 0.003, 16), red);
+      ring.rotation.x = Math.PI / 2 + 0.3;
+      turn.add(ring);
+      drill.add(turn);
+    }
+    const core = mesh(cone(0.06, 0.44, 14), red, 0, -0.2, 0);
+    core.rotation.x = Math.PI;
+    drill.add(core);
+    tail.add(drill);
+    head.add(tail);
+    tails.push(tail);
+  }
+  rig.tails = tails;
+  rig.tailLag = 0.3;
+
+  const ahoge = new THREE.Group();
+  ahoge.position.set(0, 0.28, 0.04);
+  ahoge.add(mesh(taperedTube([[0, 0, 0], [0.02, 0.07, 0.03], [0, 0.13, 0.07], [-0.045, 0.14, 0.085]], (t) => 0.02 * (1 - t * 0.7), 0.6, 24, 8), red));
+  head.add(ahoge);
+  wobble(rig, ahoge, 2);
+
+  face(rig, 'teto', {
+    style: 'anime', eyeY: 130, gap: 70, ew: 32, eh: 40, lid: 9, lash: true,
+    iris: ['#5a0d1a', '#c42a3e', '#f2899a'], pupil: '#3a0610',
+    blush: { c: 'rgba(246,130,150,0.45)', dx: 12, y: 196, rx: 20, ry: 11 },
+    nose: 'rgba(205,120,110,0.55)', mouth: 'open', mouthY: 189, mouthW: 14, mouthIn: '#b8344a', lip: '#9a2a3e',
+  });
+
+  // her trademark baguette, carried like a sword
+  const bread = new THREE.Group();
+  const loaf = mesh(capsule(0.045, 0.34), '#d89a4a');
+  loaf.scale.z = 0.85;
+  bread.add(loaf);
+  for (let i = 0; i < 4; i++) {
+    const cut = bare(mesh(sph(0.03, 10, 6), '#f3d39a', 0, -0.13 + i * 0.085, 0.034));
+    cut.scale.set(0.9, 0.35, 0.3);
+    cut.rotation.z = 0.5;
+    bread.add(cut);
+  }
+  bread.position.set(0, -0.45, 0.04);
+  bread.rotation.x = 0.25;
+  elbowR.add(bread);
+  rig.prop = bread;
+  rig.idle = 'bread';
+  return h;
+}
+
+// Frieren and her goth variant share everything but the palette.
+const FRIEREN = {
+  key: 'frieren', skin: '#f7e6da', hair: '#dcdbee', coat: '#f4f2ec', trim: '#c9a85a', trimLine: 'rgba(90,60,20,0.45)',
+  stripe: '#26262c', belt: '#26262c', buckle: '#c9ccd4', tights: '#26262c', boots: '#5a3b28', sole: '#3a271b',
+  gem: '#cf1d33', shaft: '#6b2622', glow: '#5a0010', ribbon: '#b81e2c',
+  face: { lip: '#9a5a52' },
+};
+const GOTH_FRIEREN = {
+  key: 'gothfrieren', skin: '#f4e6e6', hair: '#dcdbee', coat: '#1f1d26', trim: '#b9bcc8', trimLine: 'rgba(0,0,0,0.5)',
+  stripe: '#6e3b8c', belt: '#0f0e13', buckle: '#b9bcc8', tights: '#15141a', boots: '#16151a', sole: '#3a2a4a',
+  gem: '#8a3fd0', shaft: '#1d1b22', glow: '#3a0a6a', ribbon: '#2a2630', lace: '#d9d6e2', bows: '#15141a',
+  face: { lip: '#5a2a5e', shadow: 'rgba(120,60,150,0.5)', lid: 10 },
+};
+
+function buildFrieren(p) {
+  const { skin, hair, coat, trim, gem } = p;
+  const h = humanoid({
+    skin,
+    slim: true,
+    scale: 0.95,
+    outfitKey: p.key,
+    outfit: (c, w, hgt) => {
+      c.fillStyle = coat;
+      c.fillRect(0, 0, w, hgt);
+      // striped shirt, only seen through the capelet's front opening
+      c.fillStyle = p.stripe;
+      for (let y = 34; y < 190; y += 26) c.fillRect(w / 2 - 48, y, 96, 13);
+      c.fillStyle = p.belt;
+      c.fillRect(0, 196, w, 20);
+    },
+    sleeves: coat,
+    pants: coat,
+    shoes: p.boots,
+    sole: p.sole,
+    bareLegs: true,
+    thighs: p.tights,
+    calves: p.tights,
+  });
+  const { rig } = h;
+  const { head, body, elbowL, elbowR, legL, legR, B } = rig;
+  belt(rig, p.belt, p.buckle, 196, 216);
+
+  const hem = canvasTexture(256, 64, (c, w, hh) => {
+    c.fillStyle = coat;
+    c.fillRect(0, 0, w, hh);
+    c.fillStyle = 'rgba(0,0,0,0.05)';
+    for (let x = 0; x < w; x += 32) c.fillRect(x, 0, 6, hh);
+    c.fillStyle = trim;
+    c.fillRect(0, hh - 12, w, 10);
+    c.fillStyle = p.trimLine;
+    c.fillRect(0, hh - 14, w, 2);
+    if (p.lace) {
+      c.fillStyle = p.lace;
+      for (let x = 0; x < w; x += 16) {
+        c.beginPath();
+        c.arc(x + 8, hh - 2, 7, Math.PI, 0);
+        c.fill();
+      }
+    }
+  });
+  const dress = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.3, 0.36, 32, 1, true), texMat(hem, { side: THREE.DoubleSide }));
+  dress.position.y = 0.49;
+  dress.castShadow = true;
+  body.add(dress);
+
+  const capeTex = canvasTexture(512, 128, (c, w, hh) => {
+    c.fillStyle = coat;
+    c.fillRect(0, 0, w, hh);
+    weave(c, w, hh);
+    c.fillStyle = trim;
+    c.fillRect(0, hh - 20, w, 16);
+    c.fillRect(0, 0, 14, hh);
+    c.fillRect(w - 14, 0, 14, hh);
+    c.fillStyle = p.trimLine;
+    c.fillRect(0, hh - 22, w, 2);
+    c.fillRect(14, 0, 2, hh - 20);
+    c.fillRect(w - 16, 0, 2, hh - 20);
+    for (const x of [w * 0.25, w * 0.75]) {
+      c.fillStyle = trim;
+      c.beginPath();
+      c.ellipse(x, 66, 11, 18, 0, 0, TAU);
+      c.fill();
+      c.fillStyle = gem;
+      c.beginPath();
+      c.ellipse(x, 66, 6, 10, 0, 0, TAU);
+      c.fill();
+    }
+  });
+  // capelet: open lathe shell around the shoulders, gap at the front for the striped shirt
+  const capePts = [[0.34, 0.86], [0.33, 0.92], [0.315, 1.0], [0.295, 1.07], [0.25, 1.12], [0.17, 1.17], [0.085, 1.22]].map(([r, y]) => new THREE.Vector2(r, y));
+  const cape = new THREE.Mesh(new THREE.LatheGeometry(capePts, 40, 0.38, Math.PI * 2 - 0.76), texMat(capeTex, { side: THREE.DoubleSide }));
+  cape.scale.z = 0.7;
+  cape.castShadow = true;
+  body.add(cape);
+  body.add(mesh(rbox(0.06, 0.07, 0.025, 0.01), trim, 0, 1.12, 0.172));
+  body.add(mesh(sph(0.019, 10, 8), gem, 0, 1.12, 0.187));
+
+  for (const elbow of [elbowL, elbowR]) {
+    elbow.add(mesh(cyl(B.fore * 1.15, B.fore * 1.5, 0.13, 18), coat, 0, -0.13, 0));
+    elbow.add(mesh(cyl(B.fore * 1.56, B.fore * 1.56, 0.04, 18), trim, 0, -0.2, 0));
+  }
+  for (const leg of [legL, legR]) leg.add(mesh(cyl(0.072, 0.068, 0.17, 16), p.boots, 0, -0.43, 0));
+
+  head.children[0].material = mat(skin, { emissive: skin, emissiveIntensity: 0.15 });
+  const cap = mesh(dome(0.296), hair, 0, 0.03, -0.015);
+  cap.scale.set(1, 1.04, 1.05);
+  cap.rotation.x = -0.1;
+  head.add(cap);
+  head.add(mesh(sph(0.285, 24, 16), hair, 0, -0.03, -0.07));
+  const fringe = new THREE.Mesh(new THREE.SphereGeometry(0.305, 32, 12, Math.PI / 2 - 1.15, 2.3, 0, 1.12), mat(hair));
+  fringe.castShadow = true;
+  head.add(bare(fringe));
+  // bangs parted in the middle, longer toward the temples
+  [[-0.24, -0.11, 0.04], [-0.18, -0.05, 0.042], [-0.12, 0.01, 0.04], [-0.06, 0.05, 0.032], [0.06, 0.05, 0.032], [0.12, 0.01, 0.04], [0.18, -0.05, 0.042], [0.24, -0.11, 0.04]].forEach(([x, bottom, hw]) => {
+    const yc = (0.16 + bottom) / 2;
+    const hh = (0.16 - bottom) / 2;
+    const z = Math.sqrt(Math.max(0, 0.305 * 0.305 - x * x - yc * yc)) - 0.008;
+    const clump = mesh(petalGeo, hair, x, yc, z);
+    clump.lookAt(x * 3, yc, z * 3);
+    clump.scale.set(hw / 0.06, hh / 0.06, 0.3);
+    clump.rotateZ(x * 1.4);
+    head.add(clump);
+  });
+  for (const side of [-1, 1]) {
+    const lock = taperedTube(
+      [[side * 0.2, 0.1, 0.12], [side * 0.235, -0.05, 0.13], [side * 0.245, -0.3, 0.17], [side * 0.235, -0.58, 0.2]],
+      (t) => 0.035 + Math.sin(Math.min(1, t * 2) * Math.PI * 0.5) * 0.018 - Math.max(0, t - 0.7) * 0.08,
+      0.5,
+    );
+    head.add(mesh(lock, hair));
+  }
+
+  const tails = [];
+  for (const side of [-1, 1]) {
+    const tail = new THREE.Group();
+    tail.position.set(side * 0.17, 0.23, -0.1);
+    tail.add(mesh(sph(0.065, 14, 10), hair, side * 0.025, 0.02, 0));
+    const geo = taperedTube(
+      [[0, 0.02, 0], [side * 0.09, 0.0, -0.06], [side * 0.15, -0.3, -0.1], [side * 0.15, -0.75, -0.1], [side * 0.11, -1.05, -0.06]],
+      (t) => 0.035 + Math.sin(Math.min(1, t * 2.2) * Math.PI * 0.5) * 0.05 - Math.max(0, t - 0.55) * 0.12,
+      0.55,
+    );
+    const ribbon = new THREE.Mesh(geo, mat(hair));
+    ribbon.castShadow = true;
+    tail.add(ribbon);
+    if (p.bows) {
+      // gothic bow tying each tail
+      const bow = new THREE.Group();
+      bow.position.set(side * 0.03, 0.03, 0.03);
+      for (const s of [-1, 1]) {
+        const loop = mesh(cone(0.045, 0.11, 10), p.bows, s * 0.055, 0, 0);
+        loop.rotation.z = (s * Math.PI) / 2;
+        loop.scale.z = 0.45;
+        bow.add(loop);
+      }
+      bow.add(mesh(sph(0.022, 10, 8), gem));
+      tail.add(bow);
+    }
+    head.add(tail);
+    tails.push(tail);
+  }
+  rig.tails = tails;
+  rig.tailLag = 0.22;
+
+  for (const side of [-1, 1]) {
+    // long elf ears pointing out and slightly up/back
+    const ear = new THREE.Group();
+    ear.position.set(side * 0.245, 0.0, -0.02);
+    ear.rotation.set(0, side * 0.35, -side * (Math.PI / 2 - 0.3));
+    const lobe = mesh(cone(0.05, 0.26, 14), skin, 0, 0.12, 0);
+    lobe.scale.z = 0.4;
+    ear.add(lobe);
+    const inner = mesh(cone(0.028, 0.16, 12), '#eec0ad', 0, 0.09, 0.012);
+    inner.scale.z = 0.3;
+    ear.add(bare(inner));
+    head.add(ear);
+    const drop = new THREE.Group();
+    drop.position.set(side * 0.285, -0.065, 0.015);
+    drop.add(mesh(sph(0.014, 8, 6), trim));
+    drop.add(mesh(cyl(0.004, 0.004, 0.03, 4), trim, 0, -0.02, 0));
+    const tear = mesh(sph(0.019, 10, 8), gem, 0, -0.055, 0);
+    tear.scale.set(0.75, 2, 0.75);
+    drop.add(tear);
+    head.add(drop);
+    wobble(rig, drop, 2.5);
+  }
+
+  face(rig, p.key, {
+    style: 'anime', eyeY: 132, gap: 66, ew: 27, eh: 33, lid: 8, lash: true, sleepy: 0.28,
+    iris: ['#1e5a50', '#4c9c88', '#a8dcc6'], pupil: '#123832',
+    brow: 'rgba(150,140,175,0.8)', browY: 84, browW: 4,
+    blush: { c: 'rgba(240,150,150,0.3)', dx: 8, y: 186, rx: 18, ry: 8 },
+    nose: 'rgba(200,140,130,0.55)', noseY: 168,
+    mouth: 'flat', happyMouth: 'smile', mouthY: 196, mouthW: 12,
+    ...p.face,
+  });
+
+  // staff: shaft, crescent holding a gem, ribbon under the head
+  const staff = new THREE.Group();
+  staff.add(mesh(cyl(0.02, 0.022, 1.35, 10), p.shaft, 0, 0.2, 0));
+  staff.add(mesh(cyl(0.024, 0.02, 0.04, 10), trim, 0, -0.48, 0));
+  staff.add(mesh(cyl(0.03, 0.025, 0.06, 12), trim, 0, 0.88, 0));
+  put(staff, mesh(torus(0.1, 0.02, 28, Math.PI * 1.5), trim, 0, 1.0, 0)).rotation.z = Math.PI / 2;
+  staff.add(mesh(torus(0.05, 0.008, 18), trim, 0, 1.0, 0));
+  staff.add(mesh(sph(0.046, 14, 10), mat(gem, { emissive: p.glow, emissiveIntensity: 0.6 }), 0, 1.0, 0));
+  staff.add(mesh(cyl(0.026, 0.026, 0.04, 10), p.ribbon, 0, 0.8, 0));
+  for (const s of [-1, 1]) put(staff, mesh(rbox(0.035, 0.24, 0.006, 0.003), p.ribbon, s * 0.02, 0.68, 0.022)).rotation.z = s * 0.25;
+  staff.position.set(0, -0.245, 0);
+  staff.rotation.set(0.9, 0, -0.1);
+  elbowR.add(staff);
+  rig.prop = staff;
+  rig.idle = 'staff';
+  return h;
+}
+
+// Mr. Olympia: shirtless 70s champion in posing trunks.
+function buildOlympia() {
+  const skin = '#d49a66';
+  const hairC = '#5a3820';
+  const trunks = '#1f2850';
+  const h = humanoid({
+    skin,
+    outfitKey: 'olympia',
+    fabric: false,
+    outfit: (c, w, hgt) => {
+      c.fillStyle = skin;
+      c.fillRect(0, 0, w, hgt);
+      c.strokeStyle = 'rgba(110,55,20,0.4)';
+      c.lineWidth = 4;
+      c.lineCap = 'round';
+      // pec line, six-pack, serratus and the back's spine and shoulder blades
+      for (const dir of [-1, 1]) {
+        c.beginPath();
+        c.moveTo(w / 2, 98);
+        c.quadraticCurveTo(w / 2 + dir * 60, 116, w / 2 + dir * 92, 76);
+        c.stroke();
+        for (const y of [120, 146, 172]) {
+          c.beginPath();
+          c.moveTo(w / 2 + dir * 92, y);
+          c.lineTo(w / 2 + dir * 106, y + 12);
+          c.stroke();
+        }
+        c.beginPath();
+        c.moveTo(dir < 0 ? 18 : w - 18, 40);
+        c.quadraticCurveTo(dir < 0 ? 70 : w - 70, 70, dir < 0 ? 40 : w - 40, 120);
+        c.stroke();
+      }
+      c.beginPath();
+      c.moveTo(w / 2, 112);
+      c.lineTo(w / 2, 236);
+      for (const y of [140, 172, 204]) {
+        c.moveTo(w / 2 - 34, y);
+        c.quadraticCurveTo(w / 2, y + 6, w / 2 + 34, y);
+      }
+      c.moveTo(2, 40);
+      c.lineTo(2, hgt);
+      c.moveTo(w - 2, 40);
+      c.lineTo(w - 2, hgt);
+      c.stroke();
+    },
+    sleeves: skin,
+    pants: trunks,
+    shoes: '#f2f2f2',
+    bulk: true,
+    bareLegs: true,
+  });
+  const { rig } = h;
+  const { head, body, armL, armR, legL, legR, B } = rig;
+
+  for (const side of [-1, 1]) {
+    const pec = mesh(sph(0.15, 22, 16), skin, side * 0.135, 1.0, 0.19);
+    pec.scale.set(1.05, 0.72, 0.5);
+    pec.rotation.set(0, side * 0.3, -side * 0.12);
+    body.add(pec);
+  }
+  for (const arm of [armL, armR]) {
+    const tri = mesh(sph(B.upper, 14, 10), skin, 0, -0.13, -0.05);
+    tri.scale.set(1, 1.45, 0.95);
+    arm.add(tri);
+  }
+  for (const [leg, outer] of [[legL, -1], [legR, 1]]) {
+    const sweep = mesh(sph(0.09, 14, 10), skin, outer * 0.055, -0.17, 0.02);
+    sweep.scale.set(0.8, 1.5, 0.9);
+    leg.add(sweep);
+    leg.add(mesh(sph(0.065, 12, 10), skin, -outer * 0.05, -0.27, 0.05));
+    const calf = mesh(sph(0.07, 12, 10), skin, 0, -0.34, -0.045);
+    calf.scale.set(0.95, 1.3, 0.9);
+    leg.add(calf);
+  }
+
+  head.scale.setScalar(0.84);
+  head.position.y = 1.38;
+  // broad jaw and chin
+  head.add(mesh(rbox(0.32, 0.16, 0.26, 0.08), skin, 0, -0.14, 0.04));
+  const chin = mesh(sph(0.07, 14, 10), skin, 0, -0.2, 0.16);
+  chin.scale.set(1.3, 0.8, 0.7);
+  head.add(chin);
+  for (const x of [-0.262, 0.262]) {
+    const ear = mesh(sph(0.055, 10, 8), skin, x, 0.0, -0.01);
+    ear.scale.set(0.55, 1, 0.8);
+    head.add(ear);
+  }
+  // 70s side part: crown pushed back to show the forehead, one swept lock, short sides
+  const hairCap = mesh(dome(0.288), hairC, 0, 0.07, -0.05);
+  hairCap.rotation.x = -0.5;
+  hairCap.scale.x = 0.97;
+  head.add(hairCap);
+  const swoop = mesh(sph(0.15, 18, 12), hairC, 0.04, 0.215, 0.07);
+  swoop.scale.set(1.55, 0.42, 1.0);
+  swoop.rotation.set(-0.35, 0, -0.28);
+  head.add(swoop);
+  for (const x of [-0.25, 0.25]) head.add(mesh(rbox(0.035, 0.09, 0.07, 0.015), hairC, x, 0.01, 0.03));
+  const nose = bare(mesh(sph(0.034, 12, 10), skin, 0, -0.02, 0.27));
+  nose.scale.set(1.1, 0.9, 0.7);
+  head.add(nose);
+  face(rig, 'olympia', {
+    style: 'anime', eyeY: 96, gap: 86, ew: 27, eh: 22, lid: 9, sleepy: 0.15,
+    iris: ['#22323e', '#4f6f86', '#9fb8c8'], pupil: '#141c22',
+    brow: '#4a2e18', browY: 58, browW: 15,
+    mouth: 'grin', happyMouth: 'grin', mouthY: 204, mouthW: 70, lip: '#6a3020', mouthIn: '#7a2626',
+  });
+  rig.idle = 'flex';
+  return h;
+}
+
+// Chess knight: no legs, it hops. Built on the humanoid rig for its arms, everything else hidden.
+function buildKnight() {
+  const ivory = '#efe6d2';
+  const shade = '#d6c8aa';
+  const dark = '#2a2622';
+  const h = humanoid({ skin: ivory, outfitKey: 'knight', outfit: OUTFITS.plain(ivory), sleeves: ivory, pants: ivory, shoes: ivory, fabric: false });
+  const { rig } = h;
+  const { body, head, torso, legL, legR } = rig;
+  torso.visible = false;
+  body.children[1].visible = false;
+  body.children[2].visible = false;
+  legL.visible = legR.visible = false;
+  head.children[0].visible = false;
+
+  const profile = [[0, 0], [0.34, 0], [0.36, 0.035], [0.35, 0.07], [0.3, 0.09], [0.31, 0.13], [0.26, 0.16], [0.21, 0.2], [0.19, 0.27], [0.2, 0.31], [0.17, 0.34], [0.165, 0.5], [0.18, 0.7], [0.22, 0.9], [0.23, 1.02], [0.2, 1.12], [0.12, 1.2], [0, 1.22]];
+  body.add(mesh(cached('knightBody', () => new THREE.LatheGeometry(profile.map(([r, y]) => new THREE.Vector2(r, y)), 36)), ivory));
+  put(body, mesh(torus(0.2, 0.025, 28), shade, 0, 0.31, 0)).rotation.x = Math.PI / 2;
+
+  const neck = mesh(sph(0.17, 18, 14), ivory, 0, -0.12, -0.02);
+  neck.scale.set(1, 1.45, 1.1);
+  neck.rotation.x = 0.25;
+  head.add(neck);
+  const skull = mesh(sph(0.18, 20, 14), ivory, 0, 0.1, 0.05);
+  skull.scale.set(0.95, 0.95, 1.15);
+  head.add(skull);
+  const snout = mesh(rbox(0.2, 0.17, 0.26, 0.07), ivory, 0, 0.0, 0.2);
+  snout.rotation.x = 0.45;
+  head.add(snout);
+  const muzzle = mesh(sph(0.1, 16, 12), ivory, 0, -0.08, 0.31);
+  muzzle.scale.set(1, 0.85, 0.8);
+  head.add(muzzle);
+  for (const x of [-0.04, 0.04]) head.add(bare(mesh(sph(0.016, 8, 6), dark, x, -0.07, 0.385)));
+  for (const x of [-0.07, 0.07]) {
+    const ear = mesh(cone(0.05, 0.14, 10), ivory, x, 0.29, -0.02);
+    ear.rotation.set(-0.2, 0, -x * 3.5);
+    head.add(ear);
+  }
+  for (let i = 0; i < 6; i++) {
+    const tuft = mesh(sph(0.06, 10, 8), shade, 0, 0.24 - i * 0.09, -0.15 - i * 0.012);
+    tuft.scale.set(0.5, 1, 1.2);
+    head.add(tuft);
+  }
+  const blink = [];
+  for (const x of [-0.09, 0.09]) {
+    blink.push(put(head, mesh(sph(0.045, 14, 10), '#ffffff', x, 0.13, 0.19)));
+    blink.push(put(head, mesh(sph(0.024, 10, 8), dark, x, 0.13, 0.226)));
+    blink.push(put(head, mesh(sph(0.008, 6, 4), '#ffffff', x + 0.008, 0.142, 0.246)));
+  }
+  blinkers(rig, blink);
+  rig.hop = true;
+  return h;
+}
+
+// Claude Code robot: cream shell, terminal on the chest, the Claude spark on its head.
+function buildClaudeBot() {
+  const cream = '#f0eee6';
+  const clay = '#d97757';
+  const dark = '#2b2a27';
+  const metal = '#c9c4b6';
+  const h = humanoid({ skin: dark, outfitKey: 'claudebot', outfit: OUTFITS.plain(cream), sleeves: metal, forearms: metal, pants: dark, shoes: clay, sole: dark, fabric: false });
+  const { rig } = h;
+  const { body, head, torso } = rig;
+  torso.visible = false;
+  body.add(mesh(rbox(0.52, 0.58, 0.38, 0.09), cream, 0, 0.92, 0));
+  body.add(mesh(rbox(0.535, 0.06, 0.39, 0.025), clay, 0, 0.68, 0));
+  body.add(mesh(rbox(0.3, 0.2, 0.03, 0.02), dark, 0, 0.98, 0.18));
+  const term = canvasTexture(128, 80, (c, w, hh) => {
+    c.fillStyle = '#1f1e1d';
+    c.fillRect(0, 0, w, hh);
+    c.fillStyle = clay;
+    c.font = 'bold 46px monospace';
+    c.textBaseline = 'middle';
+    c.fillText('>', 18, hh / 2 + 2);
+    c.fillRect(58, hh / 2 + 12, 30, 7);
+  });
+  body.add(bare(mesh(new THREE.PlaneGeometry(0.26, 0.16), texMat(term, { emissive: '#ffffff', emissiveIntensity: 0.15 }), 0, 0.98, 0.197)));
+
+  head.children[0].visible = false;
+  head.add(mesh(rbox(0.5, 0.4, 0.44, 0.1), cream, 0, 0.02, 0));
+  head.add(mesh(rbox(0.4, 0.24, 0.03, 0.03), dark, 0, 0.0, 0.215));
+  const glowMat = mat(clay, { emissive: clay, emissiveIntensity: 0.6 });
+  const blink = [];
+  for (const x of [-0.08, 0.08]) blink.push(put(head, bare(mesh(rbox(0.055, 0.1, 0.02, 0.02), glowMat, x, 0.01, 0.232))));
+  blinkers(rig, blink);
+  for (const x of [-0.26, 0.26]) put(head, mesh(cyl(0.06, 0.06, 0.05, 16), clay, x, 0, 0)).rotation.z = Math.PI / 2;
+  head.add(mesh(cyl(0.015, 0.02, 0.1, 8), dark, 0, 0.26, 0));
+  // the Claude spark: rounded rays of slightly different lengths
+  const spark = new THREE.Group();
+  spark.position.set(0, 0.36, 0.02);
+  [0.12, 0.1, 0.115, 0.095, 0.12, 0.105, 0.11, 0.098, 0.118, 0.1, 0.108].forEach((len, i, all) => {
+    const a = (i / all.length) * TAU + 0.15;
+    const ray = mesh(rbox(len, 0.03, 0.03, 0.013), clay, Math.cos(a) * len * 0.5, Math.sin(a) * len * 0.5, 0);
+    ray.rotation.z = a;
+    spark.add(ray);
+  });
+  head.add(spark);
+  wobble(rig, spark, 1.2);
+  rig.idle = 'wave';
+  return h;
+}
+
+// Mr Franklyn: dark suit, and a teal badge with a graduation cap where his head should be.
+function buildFranklyn() {
+  const suit = '#1c1d23';
+  const teal = '#183f48';
+  const h = humanoid({
+    skin: '#e9c6a5',
+    outfitKey: 'franklyn',
+    outfit: (c, w, hgt) => {
+      c.fillStyle = suit;
+      c.fillRect(0, 0, w, hgt);
+      c.fillStyle = '#f4f4f2';
+      c.beginPath();
+      c.moveTo(w / 2 - 46, 0);
+      c.lineTo(w / 2 + 46, 0);
+      c.lineTo(w / 2, 150);
+      c.closePath();
+      c.fill();
+      c.fillStyle = '#0e0e12';
+      c.beginPath();
+      c.moveTo(w / 2 - 9, 14);
+      c.lineTo(w / 2 + 9, 14);
+      c.lineTo(w / 2 + 6, 30);
+      c.lineTo(w / 2 + 11, 140);
+      c.lineTo(w / 2, 152);
+      c.lineTo(w / 2 - 11, 140);
+      c.lineTo(w / 2 - 6, 30);
+      c.closePath();
+      c.fill();
+      c.strokeStyle = 'rgba(255,255,255,0.12)';
+      c.lineWidth = 3;
+      c.beginPath();
+      c.moveTo(w / 2 - 46, 0);
+      c.lineTo(w / 2 - 6, 160);
+      c.moveTo(w / 2 + 46, 0);
+      c.lineTo(w / 2 + 6, 160);
+      c.moveTo(w / 2 + 60, 92);
+      c.lineTo(w / 2 + 100, 92);
+      c.stroke();
+      c.fillStyle = '#34353d';
+      for (const y of [176, 214]) {
+        c.beginPath();
+        c.arc(w / 2, y, 6, 0, TAU);
+        c.fill();
+      }
+    },
+    sleeves: suit,
+    pants: suit,
+    shoes: '#121216',
+    sole: '#2a2a30',
+  });
+  const { rig } = h;
+  const { body, head } = rig;
+  body.children[2].material = mat(teal);
+
+  head.children[0].visible = false;
+  const badge = new THREE.Group();
+  badge.position.y = 0.02;
+  badge.rotation.x = -0.2;
+  const disc = mesh(cyl(0.3, 0.3, 0.07, 48), teal);
+  disc.rotation.x = Math.PI / 2;
+  badge.add(disc);
+  for (const z of [-0.036, 0.036]) badge.add(mesh(torus(0.29, 0.017, 48), '#7db7b0', 0, 0, z));
+  const icon = canvasTexture(256, 256, (c) => {
+    c.fillStyle = teal;
+    c.fillRect(0, 0, 256, 256);
+    c.fillStyle = '#eef0ee';
+    c.beginPath();
+    c.moveTo(48, 106);
+    c.lineTo(136, 62);
+    c.lineTo(214, 104);
+    c.lineTo(128, 148);
+    c.closePath();
+    c.fill();
+    c.beginPath();
+    c.moveTo(80, 132);
+    c.lineTo(80, 162);
+    c.lineTo(128, 190);
+    c.lineTo(176, 162);
+    c.lineTo(176, 132);
+    c.lineTo(128, 158);
+    c.closePath();
+    c.fill();
+    c.fillRect(190, 108, 12, 64);
+  });
+  badge.add(bare(mesh(new THREE.CircleGeometry(0.278, 48), texMat(icon), 0, 0, 0.0365)));
+  head.add(badge);
+  return h;
+}
+
 export const CHARACTERS = [
   {
     id: 'morel', name: 'Chef Morel', level: 1, tier: 'free',
@@ -980,51 +1777,74 @@ export const CHARACTERS = [
     },
   },
   {
+    id: 'olympia', name: 'Mr. Olympia', level: 4, tier: 'gold', variantOf: 'pump',
+    build: buildOlympia,
+  },
+  {
     id: 'bianco', name: 'Tonio', level: 1, tier: 'gold',
     build() {
       const skin = '#f2c9a2';
-      const h = humanoid({ skin, outfitKey: 'bianco', outfit: OUTFITS.italian('#f4f2ee', '#d4af37', '#cfcac0'), sleeves: '#f4f2ee', forearms: skin, pants: '#f4f2ee', shoes: '#3a2a20', scale: 1.04 });
+      const hair = '#c0915a';
+      const white = '#f7f5f0';
+      const gold = '#d4af37';
+      const red = '#c81e2a';
+      const h = humanoid({ skin, outfitKey: 'bianco', outfit: OUTFITS.italian(white, gold, '#cfcac0'), sleeves: white, forearms: skin, pants: white, shoes: '#3a2a20', scale: 1.04 });
       const { rig } = h;
-      const head = rig.head;
-      buttons(rig, '#d4af37', [50, 88], 22, 0.017);
-      head.children[0].scale.set(0.92, 1.06, 0.95);
-      const hair = mesh(dome(0.28), '#b98a4e', 0, 0.05, -0.04);
-      hair.rotation.x = -0.35;
-      head.add(hair);
+      const { head, body } = rig;
+      buttons(rig, gold, [50, 88], 22, 0.017);
+      // gold T pin on the chest, apron under a wrapped cloth sash
+      stick(rig, group(mesh(rbox(0.05, 0.013, 0.01, 0.004), gold, 0, 0.012, 0), mesh(rbox(0.013, 0.045, 0.01, 0.004), gold, 0, -0.008, 0)), 256 + 70, 66, 0.008);
+      apron(rig, white);
+      for (const [cy, lift] of [[140, 0.028], [157, 0.04], [174, 0.03]]) {
+        const v = 1 - cy / 256;
+        const r = profAt(rig.torsoP, v) + lift;
+        const wrap = mesh(cyl(r, r * 1.02, 0.05, 32), '#fbfaf6', 0, TORSO_Y + TORSO_H * v, 0);
+        wrap.scale.set(rig.torso.scale.x, 1, rig.torso.scale.z);
+        body.add(wrap);
+      }
+
+      const hairCap = mesh(dome(0.28), hair, 0, 0.05, -0.04);
+      hairCap.rotation.x = -0.35;
+      head.add(hairCap);
       for (const x of [-0.2, 0.2]) {
-        const side = mesh(sph(0.1, 12, 10), '#b98a4e', x, 0.06, 0.02);
+        const side = mesh(sph(0.1, 12, 10), hair, x, 0.06, 0.02);
         side.scale.set(0.5, 1.1, 1.1);
         head.add(side);
       }
+      const quiff = mesh(sph(0.12, 14, 10), hair, -0.07, 0.16, 0.15);
+      quiff.scale.set(1.3, 0.45, 0.6);
+      quiff.rotation.z = 0.25;
+      head.add(quiff);
+      head.add(bare(mesh(sph(0.032, 10, 8), '#e0a882', 0, -0.025, 0.272)));
+      face(rig, 'tonio', {
+        style: 'anime', eyeY: 98, gap: 78, ew: 22, eh: 22, lid: 8, sleepy: 0.3,
+        iris: ['#1d3f5a', '#4a7fa0', '#a8c8dc'], pupil: '#10222e',
+        brow: '#7a5530', browY: 62, browW: 9,
+        mouth: 'smirk', happyMouth: 'smirk', mouthY: 205, mouthW: 22, lip: '#8a4a3a',
+      });
+
+      // tall flat-topped toque with the gold T badge
       const toque = new THREE.Group();
       toque.position.y = 0.2;
-      toque.add(mesh(cyl(0.23, 0.215, 0.13, 28), '#ece8df', 0, 0.06, 0));
-      toque.add(mesh(cyl(0.21, 0.225, 0.42, 28), '#fbfaf6', 0, 0.33, 0));
-      const puff = mesh(sph(0.22, 20, 12), '#fbfaf6', 0, 0.53, 0);
-      puff.scale.y = 0.35;
-      toque.add(puff);
-      toque.add(mesh(rbox(0.08, 0.08, 0.03, 0.01), '#d4af37', 0, 0.06, 0.225));
-      toque.add(mesh(rbox(0.02, 0.06, 0.035, 0.005), '#b8901f', 0, 0.06, 0.232));
+      toque.add(mesh(cyl(0.232, 0.222, 0.12, 32), '#ebe7de', 0, 0.06, 0));
+      toque.add(mesh(cyl(0.245, 0.225, 0.5, 32), white, 0, 0.36, 0));
+      put(toque, mesh(torus(0.24, 0.012, 32), '#ebe7de', 0, 0.61, 0)).rotation.x = Math.PI / 2;
+      toque.add(mesh(rbox(0.085, 0.085, 0.02, 0.012), gold, 0, 0.07, 0.228));
+      toque.add(bare(mesh(rbox(0.056, 0.014, 0.012, 0.004), '#8a6a14', 0, 0.092, 0.24)));
+      toque.add(bare(mesh(rbox(0.014, 0.05, 0.012, 0.004), '#8a6a14', 0, 0.064, 0.24)));
       head.add(toque);
-      wobble(rig, toque, 0.8);
-      const blink = [];
-      for (const x of [-0.085, 0.085]) {
-        blink.push(put(head, mesh(sph(0.04, 12, 10), '#ffffff', x, 0.02, 0.235)));
-        blink.push(put(head, mesh(sph(0.024, 10, 8), '#4a7fa0', x, 0.02, 0.27)));
-        blink.push(put(head, mesh(sph(0.007, 6, 4), '#ffffff', x + 0.008, 0.028, 0.292)));
-        const brow = bare(mesh(rbox(0.1, 0.022, 0.03, 0.01), '#8a6236', x, 0.085, 0.245));
-        brow.rotation.z = x < 0 ? 0.12 : -0.12;
-        head.add(brow);
-      }
-      blinkers(rig, blink);
-      head.add(bare(mesh(sph(0.03, 8, 6), '#e0a882', 0, -0.03, 0.27)));
-      const smile = bare(mesh(torus(0.05, 0.01, 10, Math.PI * 0.8), '#7a3a2a', 0.01, -0.1, 0.24));
-      smile.rotation.z = Math.PI * 1.1;
-      head.add(smile);
-      put(rig.body, mesh(torus(0.11, 0.035, 18), '#c81e2a', 0, 1.22, 0.02)).rotation.x = Math.PI / 2;
-      const knot = mesh(cone(0.07, 0.16, 3), '#c81e2a', 0, 1.1, 0.17);
-      knot.rotation.set(Math.PI + 0.3, 0, 0);
-      rig.body.add(knot);
+      wobble(rig, toque, 0.7);
+
+      // knotted red neckerchief with the ends hanging off to one side
+      put(body, mesh(torus(0.11, 0.035, 18), red, 0, 1.22, 0.02)).rotation.x = Math.PI / 2;
+      body.add(mesh(sph(0.045, 12, 10), red, 0.03, 1.15, 0.15));
+      const endA = mesh(rbox(0.07, 0.17, 0.015, 0.012), red, 0.07, 1.06, 0.17);
+      endA.rotation.set(-0.2, 0, 0.4);
+      body.add(endA);
+      const endB = mesh(rbox(0.06, 0.14, 0.015, 0.012), '#a8161f', 0.0, 1.07, 0.168);
+      endB.rotation.set(-0.2, 0, -0.1);
+      body.add(endB);
+
       const knife = new THREE.Group();
       knife.add(mesh(rbox(0.035, 0.12, 0.035, 0.012), '#2a2024', 0, 0, 0));
       knife.add(mesh(rbox(0.065, 0.36, 0.014, 0.005), '#9fb2c0', 0.012, 0.24, 0));
@@ -1032,351 +1852,28 @@ export const CHARACTERS = [
       knife.rotation.x = Math.PI / 2;
       rig.elbowR.add(knife);
       rig.prop = knife;
+      rig.propRest = knife.rotation.clone();
+      // blade up beside the chest while the arms are crossed
+      rig.propPose = new THREE.Euler(2.935, 0.426, -1.188);
+      rig.idle = 'crossed';
       return h;
     },
   },
   {
     id: 'miku', name: 'Miku', level: 1, tier: 'gold',
-    build() {
-      const skin = '#fbe4d8';
-      const teal = '#3cc6cc';
-      const tealDark = '#2a9aa2';
-      const black = '#26272d';
-      const skirtGray = '#3d4248';
-      const h = humanoid({
-        skin,
-        slim: true,
-        fabric: false,
-        outfitKey: 'miku2',
-        outfit: (c, w, hgt) => {
-          c.fillStyle = '#c9cdd3';
-          c.fillRect(0, 0, w, hgt);
-          c.fillStyle = skin;
-          for (const x of [w * 0.25, w * 0.75]) {
-            c.beginPath();
-            c.ellipse(x, 0, 70, 62, 0, 0, Math.PI * 2);
-            c.fill();
-          }
-          c.fillStyle = skirtGray;
-          c.fillRect(w / 2 - 62, 0, 124, 26);
-          c.fillStyle = teal;
-          c.fillRect(w / 2 - 62, 24, 124, 5);
-          c.beginPath();
-          c.moveTo(w / 2 - 13, 26);
-          c.lineTo(w / 2 + 13, 26);
-          c.lineTo(w / 2 + 17, hgt - 18);
-          c.lineTo(w / 2, hgt);
-          c.lineTo(w / 2 - 17, hgt - 18);
-          c.fill();
-          c.fillStyle = tealDark;
-          c.fillRect(w / 2 - 15, 24, 30, 18);
-          c.fillStyle = '#d9b44a';
-          c.fillRect(w / 2 - 100, 78, 46, 10);
-          c.strokeStyle = 'rgba(0,0,0,0.08)';
-          c.lineWidth = 3;
-          c.beginPath();
-          c.moveTo(w / 2 + 30, 40);
-          c.lineTo(w / 2 + 30, hgt);
-          c.stroke();
-        },
-        sleeves: skin,
-        forearms: black,
-        pants: skirtGray,
-        shoes: black,
-        sole: teal,
-        bareLegs: true,
-        calves: black,
-      });
-      const { head, body, armL, armR, elbowL, elbowR, legL, legR } = h.rig;
-
-      const pleats = canvasTexture(256, 64, (c, w, hh) => {
-        c.fillStyle = skirtGray;
-        c.fillRect(0, 0, w, hh);
-        for (let x = 0; x < w; x += 16) {
-          c.fillStyle = 'rgba(0,0,0,0.28)';
-          c.fillRect(x, 0, 4, hh);
-          c.fillStyle = 'rgba(255,255,255,0.06)';
-          c.fillRect(x + 4, 0, 3, hh);
-        }
-        c.fillStyle = teal;
-        c.fillRect(0, hh - 7, w, 7);
-      });
-      const skirt = new THREE.Mesh(new THREE.CylinderGeometry(0.19, 0.32, 0.25, 32, 1, true), texMat(pleats, { side: THREE.DoubleSide }));
-      skirt.position.y = 0.55;
-      skirt.castShadow = true;
-      body.add(skirt);
-
-      for (const arm of [armL, armR]) {
-        arm.add(mesh(capsule(0.058, 0.06), black, 0, -0.2, 0));
-        arm.add(mesh(cyl(0.062, 0.062, 0.025, 16), teal, 0, -0.15, 0));
-      }
-      for (const elbow of [elbowL, elbowR]) {
-        elbow.children[0].visible = false;
-        elbow.add(mesh(cyl(0.06, 0.1, 0.25, 20), black, 0, -0.13, 0));
-        elbow.add(mesh(cyl(0.102, 0.102, 0.03, 20), teal, 0, -0.255, 0));
-        elbow.children[1].position.y = -0.3;
-      }
-      for (const leg of [legL, legR]) {
-        leg.add(mesh(capsule(0.066, 0.1), black, 0, -0.25, 0.005));
-        leg.add(mesh(cyl(0.07, 0.07, 0.03, 16), teal, 0, -0.19, 0.005));
-      }
-
-      head.children[0].material = mat(skin, { emissive: skin, emissiveIntensity: 0.22 });
-      head.scale.setScalar(1.04);
-      const cap = mesh(dome(0.296), teal, 0, 0.03, -0.015);
-      cap.scale.set(1, 1.05, 1.06);
-      cap.rotation.x = -0.08;
-      head.add(cap);
-      head.add(mesh(sph(0.285, 24, 16), teal, 0, -0.02, -0.065));
-      const fringe = new THREE.Mesh(new THREE.SphereGeometry(0.305, 32, 12, Math.PI / 2 - 1.15, 2.3, 0, 1.12), mat(teal));
-      fringe.castShadow = true;
-      head.add(fringe);
-      [[-0.225, -0.04, 0.05], [-0.15, 0.04, 0.05], [-0.075, 0.06, 0.048], [0, 0.0, 0.022], [0.075, 0.06, 0.048], [0.15, 0.04, 0.05], [0.225, -0.03, 0.05]].forEach(([x, bottom, hw]) => {
-        const yc = (0.125 + bottom) / 2;
-        const hh = (0.125 - bottom) / 2;
-        const z = Math.sqrt(Math.max(0, 0.305 * 0.305 - x * x - yc * yc)) - 0.008;
-        const clump = mesh(petalGeo, teal, x, yc, z);
-        clump.lookAt(x * 3, yc, z * 3);
-        clump.scale.set(hw / 0.06, hh / 0.06, 0.3);
-        clump.rotateZ(x * 0.8);
-        head.add(clump);
-      });
-      for (const x of [-0.235, 0.235]) {
-        const lock = mesh(capsule(0.05, 0.32), teal, x, -0.16, 0.06);
-        lock.scale.z = 0.55;
-        lock.rotation.z = x > 0 ? 0.08 : -0.08;
-        head.add(lock);
-      }
-
-      const tails = [];
-      for (const side of [-1, 1]) {
-        const tail = new THREE.Group();
-        tail.position.set(side * 0.24, 0.13, -0.07);
-        const pod = new THREE.Group();
-        pod.add(mesh(rbox(0.06, 0.15, 0.11, 0.02), black, 0, 0, 0));
-        pod.add(mesh(rbox(0.012, 0.15, 0.03, 0.004), '#e0408f', side * 0.03, 0, 0.025));
-        pod.add(mesh(rbox(0.012, 0.15, 0.015, 0.004), '#e0408f', side * 0.03, 0, -0.025));
-        pod.position.set(side * 0.035, 0.03, 0.01);
-        pod.rotation.z = side * -0.35;
-        tail.add(pod);
-        const geo = taperedTube(
-          [
-            [0, 0, 0],
-            [side * 0.16, -0.12, -0.05],
-            [side * 0.24, -0.45, -0.08],
-            [side * 0.22, -0.85, -0.06],
-            [side * 0.16, -1.18, -0.02],
-          ],
-          (t) => 0.05 + Math.sin(Math.min(1, t * 1.6) * Math.PI * 0.5) * 0.085 - Math.max(0, t - 0.6) * 0.3,
-          0.42,
-        );
-        const ribbon = new THREE.Mesh(geo, mat(teal));
-        ribbon.castShadow = true;
-        tail.add(ribbon);
-        head.add(tail);
-        tails.push(tail);
-      }
-      h.rig.tails = tails;
-
-      face(h.rig, 'miku', {
-        style: 'anime', eyeY: 130, gap: 70, ew: 33, eh: 42, lid: 9, lash: true,
-        iris: ['#16606a', '#2fb2ba', '#8de8e4'], pupil: '#0f3a42',
-        blush: { c: 'rgba(246,140,160,0.45)', dx: 12, y: 196, rx: 20, ry: 11 },
-        nose: 'rgba(205,120,110,0.55)', mouth: 'open', mouthY: 189, mouthW: 16, mouthIn: '#b8344a', lip: '#9a2a3e',
-      });
-      for (const side of [-1, 1]) {
-        put(head, mesh(cyl(0.065, 0.065, 0.05, 20), black, side * 0.29, -0.02, 0.0)).rotation.z = Math.PI / 2;
-        put(head, mesh(cyl(0.035, 0.035, 0.055, 14), teal, side * 0.296, -0.02, 0.0)).rotation.z = Math.PI / 2;
-      }
-      h.rig.idle = 'pose';
-      return h;
-    },
+    build: buildMiku,
+  },
+  {
+    id: 'teto', name: 'Kasane Teto', level: 3, tier: 'gold', variantOf: 'miku',
+    build: buildTeto,
   },
   {
     id: 'frieren', name: 'Frieren', level: 1, tier: 'gold',
-    build() {
-      const skin = '#f7e6da';
-      const hair = '#dcdbee';
-      const white = '#f4f2ec';
-      const gold = '#c9a85a';
-      const ink = '#26262c';
-      const brown = '#5a3b28';
-      const ruby = '#cf1d33';
-      const h = humanoid({
-        skin,
-        slim: true,
-        scale: 0.95,
-        outfitKey: 'frieren',
-        outfit: (c, w, hgt) => {
-          c.fillStyle = white;
-          c.fillRect(0, 0, w, hgt);
-          // striped shirt, only seen through the capelet's front opening
-          c.fillStyle = ink;
-          for (let y = 34; y < 190; y += 26) c.fillRect(w / 2 - 48, y, 96, 13);
-          c.fillRect(0, 196, w, 20);
-        },
-        sleeves: white,
-        pants: white,
-        shoes: brown,
-        sole: '#3a271b',
-        bareLegs: true,
-        thighs: ink,
-        calves: ink,
-      });
-      const { rig } = h;
-      const { head, body, elbowL, elbowR, legL, legR, B } = rig;
-      belt(rig, ink, '#c9ccd4', 196, 216);
-
-      const hem = canvasTexture(256, 64, (c, w, hh) => {
-        c.fillStyle = white;
-        c.fillRect(0, 0, w, hh);
-        c.fillStyle = 'rgba(0,0,0,0.05)';
-        for (let x = 0; x < w; x += 32) c.fillRect(x, 0, 6, hh);
-        c.fillStyle = gold;
-        c.fillRect(0, hh - 12, w, 10);
-        c.fillStyle = 'rgba(90,60,20,0.5)';
-        c.fillRect(0, hh - 14, w, 2);
-      });
-      const dress = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.3, 0.36, 32, 1, true), texMat(hem, { side: THREE.DoubleSide }));
-      dress.position.y = 0.49;
-      dress.castShadow = true;
-      body.add(dress);
-
-      const capeTex = canvasTexture(512, 128, (c, w, hh) => {
-        c.fillStyle = white;
-        c.fillRect(0, 0, w, hh);
-        weave(c, w, hh);
-        c.fillStyle = gold;
-        c.fillRect(0, hh - 20, w, 16);
-        c.fillRect(0, 0, 14, hh);
-        c.fillRect(w - 14, 0, 14, hh);
-        c.fillStyle = 'rgba(90,60,20,0.45)';
-        c.fillRect(0, hh - 22, w, 2);
-        c.fillRect(14, 0, 2, hh - 20);
-        c.fillRect(w - 16, 0, 2, hh - 20);
-        for (const x of [w * 0.25, w * 0.75]) {
-          c.fillStyle = gold;
-          c.beginPath();
-          c.ellipse(x, 66, 11, 18, 0, 0, TAU);
-          c.fill();
-          c.fillStyle = ruby;
-          c.beginPath();
-          c.ellipse(x, 66, 6, 10, 0, 0, TAU);
-          c.fill();
-        }
-      });
-      // capelet: open lathe shell around the shoulders, gap at the front for the striped shirt
-      const capePts = [[0.34, 0.86], [0.33, 0.92], [0.315, 1.0], [0.295, 1.07], [0.25, 1.12], [0.17, 1.17], [0.085, 1.22]].map(([r, y]) => new THREE.Vector2(r, y));
-      const cape = new THREE.Mesh(new THREE.LatheGeometry(capePts, 40, 0.38, Math.PI * 2 - 0.76), texMat(capeTex, { side: THREE.DoubleSide }));
-      cape.scale.z = 0.7;
-      cape.castShadow = true;
-      body.add(cape);
-      body.add(mesh(rbox(0.06, 0.07, 0.025, 0.01), gold, 0, 1.12, 0.172));
-      body.add(mesh(sph(0.019, 10, 8), ruby, 0, 1.12, 0.187));
-
-      for (const elbow of [elbowL, elbowR]) {
-        elbow.add(mesh(cyl(B.fore * 1.15, B.fore * 1.5, 0.13, 18), white, 0, -0.13, 0));
-        elbow.add(mesh(cyl(B.fore * 1.56, B.fore * 1.56, 0.04, 18), gold, 0, -0.2, 0));
-      }
-      for (const leg of [legL, legR]) leg.add(mesh(cyl(0.072, 0.068, 0.17, 16), brown, 0, -0.43, 0));
-
-      head.children[0].material = mat(skin, { emissive: skin, emissiveIntensity: 0.15 });
-      const cap = mesh(dome(0.296), hair, 0, 0.03, -0.015);
-      cap.scale.set(1, 1.04, 1.05);
-      cap.rotation.x = -0.1;
-      head.add(cap);
-      head.add(mesh(sph(0.285, 24, 16), hair, 0, -0.03, -0.07));
-      const fringe = new THREE.Mesh(new THREE.SphereGeometry(0.305, 32, 12, Math.PI / 2 - 1.15, 2.3, 0, 1.12), mat(hair));
-      fringe.castShadow = true;
-      head.add(bare(fringe));
-      // bangs parted in the middle, longer toward the temples
-      [[-0.24, -0.11, 0.04], [-0.18, -0.05, 0.042], [-0.12, 0.01, 0.04], [-0.06, 0.05, 0.032], [0.06, 0.05, 0.032], [0.12, 0.01, 0.04], [0.18, -0.05, 0.042], [0.24, -0.11, 0.04]].forEach(([x, bottom, hw]) => {
-        const yc = (0.16 + bottom) / 2;
-        const hh = (0.16 - bottom) / 2;
-        const z = Math.sqrt(Math.max(0, 0.305 * 0.305 - x * x - yc * yc)) - 0.008;
-        const clump = mesh(petalGeo, hair, x, yc, z);
-        clump.lookAt(x * 3, yc, z * 3);
-        clump.scale.set(hw / 0.06, hh / 0.06, 0.3);
-        clump.rotateZ(x * 1.4);
-        head.add(clump);
-      });
-      for (const side of [-1, 1]) {
-        const lock = taperedTube(
-          [[side * 0.2, 0.1, 0.12], [side * 0.235, -0.05, 0.13], [side * 0.245, -0.3, 0.17], [side * 0.235, -0.58, 0.2]],
-          (t) => 0.035 + Math.sin(Math.min(1, t * 2) * Math.PI * 0.5) * 0.018 - Math.max(0, t - 0.7) * 0.08,
-          0.5,
-        );
-        head.add(mesh(lock, hair));
-      }
-
-      const tails = [];
-      for (const side of [-1, 1]) {
-        const tail = new THREE.Group();
-        tail.position.set(side * 0.17, 0.23, -0.1);
-        tail.add(mesh(sph(0.065, 14, 10), hair, side * 0.025, 0.02, 0));
-        const geo = taperedTube(
-          [[0, 0.02, 0], [side * 0.09, 0.0, -0.06], [side * 0.15, -0.3, -0.1], [side * 0.15, -0.75, -0.1], [side * 0.11, -1.05, -0.06]],
-          (t) => 0.035 + Math.sin(Math.min(1, t * 2.2) * Math.PI * 0.5) * 0.05 - Math.max(0, t - 0.55) * 0.12,
-          0.55,
-        );
-        const ribbon = new THREE.Mesh(geo, mat(hair));
-        ribbon.castShadow = true;
-        tail.add(ribbon);
-        head.add(tail);
-        tails.push(tail);
-      }
-      rig.tails = tails;
-      rig.tailLag = 0.22;
-
-      for (const side of [-1, 1]) {
-        // long elf ears pointing out and slightly up/back
-        const ear = new THREE.Group();
-        ear.position.set(side * 0.245, 0.0, -0.02);
-        ear.rotation.set(0, side * 0.35, -side * (Math.PI / 2 - 0.3));
-        const lobe = mesh(cone(0.05, 0.26, 14), skin, 0, 0.12, 0);
-        lobe.scale.z = 0.4;
-        ear.add(lobe);
-        const inner = mesh(cone(0.028, 0.16, 12), '#eec0ad', 0, 0.09, 0.012);
-        inner.scale.z = 0.3;
-        ear.add(bare(inner));
-        head.add(ear);
-        const drop = new THREE.Group();
-        drop.position.set(side * 0.285, -0.065, 0.015);
-        drop.add(mesh(sph(0.014, 8, 6), gold));
-        drop.add(mesh(cyl(0.004, 0.004, 0.03, 4), gold, 0, -0.02, 0));
-        const gem = mesh(sph(0.019, 10, 8), ruby, 0, -0.055, 0);
-        gem.scale.set(0.75, 2, 0.75);
-        drop.add(gem);
-        head.add(drop);
-        wobble(rig, drop, 2.5);
-      }
-
-      face(rig, 'frieren', {
-        style: 'anime', eyeY: 132, gap: 66, ew: 27, eh: 33, lid: 8, lash: true, sleepy: 0.28,
-        iris: ['#1e5a50', '#4c9c88', '#a8dcc6'], pupil: '#123832',
-        brow: 'rgba(150,140,175,0.8)', browY: 84, browW: 4,
-        blush: { c: 'rgba(240,150,150,0.3)', dx: 8, y: 186, rx: 18, ry: 8 },
-        nose: 'rgba(200,140,130,0.55)', noseY: 168,
-        mouth: 'flat', happyMouth: 'smile', mouthY: 196, mouthW: 12, lip: '#9a5a52',
-      });
-
-      // staff: maroon shaft, gold crescent holding a red gem, red ribbon under the head
-      const staff = new THREE.Group();
-      staff.add(mesh(cyl(0.02, 0.022, 1.35, 10), '#6b2622', 0, 0.2, 0));
-      staff.add(mesh(cyl(0.024, 0.02, 0.04, 10), gold, 0, -0.48, 0));
-      staff.add(mesh(cyl(0.03, 0.025, 0.06, 12), gold, 0, 0.88, 0));
-      put(staff, mesh(torus(0.1, 0.02, 28, Math.PI * 1.5), gold, 0, 1.0, 0)).rotation.z = Math.PI / 2;
-      staff.add(mesh(torus(0.05, 0.008, 18), gold, 0, 1.0, 0));
-      staff.add(mesh(sph(0.046, 14, 10), mat(ruby, { emissive: '#5a0010', emissiveIntensity: 0.6 }), 0, 1.0, 0));
-      staff.add(mesh(cyl(0.026, 0.026, 0.04, 10), '#b81e2c', 0, 0.8, 0));
-      for (const s of [-1, 1]) put(staff, mesh(rbox(0.035, 0.24, 0.006, 0.003), '#b81e2c', s * 0.02, 0.68, 0.022)).rotation.z = s * 0.25;
-      staff.position.set(0, -0.245, 0);
-      staff.rotation.set(0.9, 0, -0.1);
-      elbowR.add(staff);
-      rig.prop = staff;
-      rig.idle = 'staff';
-      return h;
-    },
+    build: () => buildFrieren(FRIEREN),
+  },
+  {
+    id: 'gothfrieren', name: 'Goth Frieren', level: 5, tier: 'gold', variantOf: 'frieren',
+    build: () => buildFrieren(GOTH_FRIEREN),
   },
   {
     id: 'bandit', name: 'Bandit', level: 5, tier: 'gold',
@@ -1405,6 +1902,10 @@ export const CHARACTERS = [
     },
   },
   {
+    id: 'knight', name: 'Chess Knight', level: 6, tier: 'gold',
+    build: buildKnight,
+  },
+  {
     id: 'maki', name: 'Maki-san', level: 7, tier: 'gold',
     build() {
       const h = humanoid({ skin: '#f6f3ea', outfitKey: 'maki', outfit: OUTFITS.tunic('#2e7d4f', '#e2402f'), sleeves: '#2e7d4f', pants: '#1f3d2b', shoes: '#e2402f' });
@@ -1425,6 +1926,14 @@ export const CHARACTERS = [
       blinkers(rig, blink);
       return h;
     },
+  },
+  {
+    id: 'claudebot', name: 'Claude Bot', level: 8, tier: 'gold',
+    build: buildClaudeBot,
+  },
+  {
+    id: 'franklyn', name: 'Mr Franklyn', level: 9, tier: 'gold',
+    build: buildFranklyn,
   },
 ];
 
@@ -1640,20 +2149,33 @@ export function animateRig(rig, dt, moveAmt, carrying, t) {
   rig.yaw = yaw;
   rig.turn = lerp(rig.turn || 0, turn, Math.min(1, dt * 8));
 
-  rig.phase += dt * (6 + 6 * target);
-  const swing = Math.sin(rig.phase) * 0.7 * target;
-  rig.legL.rotation.x = swing;
-  rig.legR.rotation.x = -swing;
-  const bounce = Math.abs(Math.sin(rig.phase));
-  rig.body.position.y = bounce * 0.05 * target + Math.sin(t * 2) * 0.006;
-  // squash on foot plant, stretch at the top of the step, slow breathing at rest
-  const sy = 1 + target * (bounce * 0.035 - (1 - bounce) ** 4 * 0.06) + Math.sin(t * 2) * 0.006 * (1 - target);
+  let swing, sy;
+  let flap = 0;
+  if (rig.hop) {
+    // no legs: travel in hops, big squash on landing, arms flap out in the air
+    rig.phase += dt * (4.5 + 3.5 * target);
+    const air = Math.abs(Math.sin(rig.phase));
+    swing = 0;
+    flap = air * target * 0.5;
+    rig.body.position.y = air ** 0.7 * 0.24 * target + Math.max(0, Math.sin(t * 2.4)) ** 6 * 0.03 * (1 - target);
+    sy = 1 + target * (air * 0.08 - (1 - air) ** 6 * 0.22);
+  } else {
+    rig.phase += dt * (6 + 6 * target);
+    swing = Math.sin(rig.phase) * 0.7 * target;
+    rig.legL.rotation.x = swing;
+    rig.legR.rotation.x = -swing;
+    const bounce = Math.abs(Math.sin(rig.phase));
+    rig.body.position.y = bounce * 0.05 * target + Math.sin(t * 2) * 0.006;
+    // squash on foot plant, stretch at the top of the step, slow breathing at rest
+    sy = 1 + target * (bounce * 0.035 - (1 - bounce) ** 4 * 0.06) + Math.sin(t * 2) * 0.006 * (1 - target);
+  }
   rig.body.scale.set(1 / Math.sqrt(sy), sy, 1 / Math.sqrt(sy));
   const k = Math.min(1, dt * 14);
   rig.body.rotation.x = lerp(rig.body.rotation.x, target * (carrying ? 0.05 : 0.12), k * 0.5);
 
   const out = rig.bulk ? 0.2 : 0;
   if (rig.prop) rig.prop.visible = !carrying;
+  if (rig.propRest) rig.prop.rotation.copy(rig.propRest);
   rig.swingL ||= { x: 0, v: 0 };
   rig.swingR ||= { x: 0, v: 0 };
   if (carrying) {
@@ -1667,8 +2189,8 @@ export function animateRig(rig, dt, moveAmt, carrying, t) {
     // springs give the swing a little overshoot when starting and stopping
     const ax = spring(rig.swingL, -swing * 0.8, dt, 150, 13);
     const bx = spring(rig.swingR, swing * 0.8, dt, 150, 13);
-    aimArm(rig.armL, rig.elbowL, ax, 0, -0.1 - out, -0.25 - target * 0.3 - Math.max(0, -ax) * 0.5, 0, k);
-    aimArm(rig.armR, rig.elbowR, bx, 0, 0.1 + out, -0.25 - target * 0.3 - Math.max(0, -bx) * 0.5, 0, k);
+    aimArm(rig.armL, rig.elbowL, ax, 0, -0.1 - out - flap, -0.25 - target * 0.3 - Math.max(0, -ax) * 0.5, 0, k);
+    aimArm(rig.armR, rig.elbowR, bx, 0, 0.1 + out + flap, -0.25 - target * 0.3 - Math.max(0, -bx) * 0.5, 0, k);
     rig.armL.rotation.x = ax;
     rig.armR.rotation.x = bx;
   }
@@ -1691,7 +2213,7 @@ export function animateRig(rig, dt, moveAmt, carrying, t) {
 }
 
 export function poseIdle(rig, t) {
-  rig.body.position.y = Math.sin(t * 2) * 0.01;
+  rig.body.position.y = rig.hop ? Math.max(0, Math.sin(t * 2.4)) ** 4 * 0.12 : Math.sin(t * 2) * 0.01;
   const breath = 1 + Math.sin(t * 2) * 0.008;
   rig.body.scale.set(1 / Math.sqrt(breath), breath, 1 / Math.sqrt(breath));
   rig.body.rotation.x = 0;
@@ -1710,6 +2232,13 @@ export function poseIdle(rig, t) {
   } else if (rig.idle === 'wave') {
     aimArm(rig.armL, rig.elbowL, 0, 0, -0.55, 0, 0, 1, 1.9);
     aimArm(rig.armR, rig.elbowR, 0, 0, 2.45, 0, 0, 1, 0.35 + Math.sin(t * 6) * 0.4);
+  } else if (rig.idle === 'crossed') {
+    // solved against the rig: forearms level across the lower chest, right over left
+    aimArm(rig.armL, rig.elbowL, -1.4, 0, 0.6, -0.8, 1.47, 1);
+    aimArm(rig.armR, rig.elbowR, -1.2, 0, -0.6, -0.8, -1.47, 1);
+  } else if (rig.idle === 'bread') {
+    aimArm(rig.armL, rig.elbowL, 0, 0, -0.5, 0, 0, 1, 1.9);
+    aimArm(rig.armR, rig.elbowR, -0.2, 0, 0.4, -2.2, 1.1, 1);
   } else if (rig.idle === 'staff') {
     aimArm(rig.armL, rig.elbowL, 0.05, 0, -0.1, -0.3, 0, 1);
     aimArm(rig.armR, rig.elbowR, -0.3, 0, 0.14, -0.5, 0, 1);
@@ -1724,6 +2253,7 @@ export function poseIdle(rig, t) {
   rig.legL.rotation.x = 0;
   rig.legR.rotation.x = 0;
   rig.head.rotation.set(Math.sin(t * 0.9) * 0.04, Math.sin(t * 0.6) * 0.15, 0);
+  if (rig.propPose) rig.prop.rotation.copy(rig.propPose);
   updateFace(rig, t);
 }
 
