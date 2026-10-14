@@ -110,6 +110,7 @@ export const sfx = {
 const MUSIC_VOL = 0.55;
 const MAJOR = [0, 2, 4, 5, 7, 9, 11];
 const HIRAJOSHI = [0, 2, 3, 7, 8];
+const HIJAZ = [0, 1, 4, 5, 7, 8, 10];
 const midi = (n) => 440 * 2 ** ((n - 69) / 12);
 
 // Step-sequenced themes. Degrees index into `scale` (wrapping into higher octaves);
@@ -175,6 +176,22 @@ const TRACKS = {
       ],
     },
   },
+  doner: {
+    // Hijaz scale over a maqsum darbuka rhythm (doum-tek-tek-doum-tek)
+    bpm: 118, steps: 16, root: 62, scale: HIJAZ, prog: [0, 3, 6, 0],
+    bass: { at: [0, 6, 8, 11], deg: [0, 0, 4, 0], oct: -2, type: 'triangle', vol: 0.3, len: 2.5 },
+    arp: { every: 2, pattern: [0, 4, 7, 4, 2, 4, 7, 9], oct: 0, type: 'triangle', vol: 0.05 },
+    drums: { t: 'x.......x.......', w: '..x...x.....x...', h: 'o.o.o.o.o.o.o.o.' },
+    lead: {
+      type: 'triangle', vol: 0.13, oct: 1,
+      bars: [
+        [[0, 4, 2], [2, 5, 2], [4, 4, 2], [6, 3, 2], [8, 2, 4], [12, 1, 2], [14, 2, 2]],
+        [[0, 3, 4], [4, 5, 2], [6, 4, 2], [8, 3, 4], [12, 2, 4]],
+        [[0, 6, 3], [3, 5, 1], [4, 4, 2], [6, 3, 2], [8, 2, 2], [10, 1, 2], [12, 2, 4]],
+        [[0, 1, 2], [2, 2, 2], [4, 1, 2], [6, 0, 2], [8, 0, 8]],
+      ],
+    },
+  },
   wiener: {
     // waltz: three beats of four steps, oom-pah-pah
     bpm: 168, steps: 12, root: 58, scale: MAJOR, prog: [0, 4, 4, 0],
@@ -193,7 +210,7 @@ const TRACKS = {
   },
 };
 
-const LEVEL_TRACKS = { sushi: 'sushi', street: 'sushi', burger: 'diner', happy: 'happy', austria: 'wiener' };
+const LEVEL_TRACKS = { sushi: 'sushi', street: 'sushi', burger: 'diner', happy: 'happy', austria: 'wiener', doner: 'doner' };
 
 let musicBus = null;
 let noiseBuf = null;

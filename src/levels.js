@@ -1,4 +1,4 @@
-import { buildSushiBar, buildSushiStreet, buildBurgerDiner, buildHappyHour, buildWirtshaus } from './maps.js';
+import { buildSushiBar, buildSushiStreet, buildBurgerDiner, buildHappyHour, buildWirtshaus, buildDoner } from './maps.js';
 
 export const TRAY_CAP = 3;
 
@@ -98,6 +98,35 @@ function austrianCompose(items, comp) {
   }
   if (full) return { error: 'Tray is full!' };
   next.push(comp === 'sacher' ? { kind: 'sacher', cream: false } : { kind: comp });
+  return { items: next };
+}
+
+// Döner goes in bread, Dürüm in a yufka wrap; meat, salad and sauce go into the latest one missing them.
+const DONER_FILLS = { kebab: 'K', salad: 'S', sauce: 'C' };
+
+function donerDishId(d) {
+  if (d.kind === 'doner') return d.K && d.S ? 'doner' : d.K || d.S || d.C ? 'doner_wip' : 'ekmek';
+  if (d.kind === 'durum') return d.K && d.S && d.C ? 'durum' : d.K || d.S || d.C ? 'durum_wip' : 'yufka';
+  return d.kind;
+}
+
+function donerCompose(items, comp) {
+  const next = items.map((d) => ({ ...d }));
+  const full = next.length >= TRAY_CAP;
+  if (comp === 'bread' || comp === 'yufka') {
+    if (full) return { error: 'Tray is full!' };
+    next.push({ kind: comp === 'bread' ? 'doner' : 'durum', K: false, S: false, C: false });
+    return { items: next };
+  }
+  const flag = DONER_FILLS[comp];
+  if (flag) {
+    const d = next.findLast((x) => (x.kind === 'doner' || x.kind === 'durum') && !x[flag]);
+    if (!d) return { error: 'Grab bread or a yufka first!' };
+    d[flag] = true;
+    return { items: next };
+  }
+  if (full) return { error: 'Tray is full!' };
+  next.push({ kind: comp });
   return { items: next };
 }
 
@@ -290,7 +319,39 @@ LEVELS.austria = {
   dishId: austrianDishId,
 };
 
-export const LEVEL_ORDER = ['sushi', 'street', 'burger', 'happy', 'austria'];
+LEVELS.doner = {
+  id: 'doner',
+  name: 'Döner Imbiss',
+  blurb: 'Döner, Dürüm und Ayran',
+  build: buildDoner,
+  seats: [-2.4, -0.8, 0.8, 2.4],
+  stations: [
+    { id: 'bread', name: 'Bread', kind: 'instant', model: 'flatbread', side: 'left', z: -1.7, gives: 'bread' },
+    { id: 'yufka', name: 'Yufka', kind: 'instant', model: 'yufka', side: 'left', z: -0.5, gives: 'yufka' },
+    { id: 'salad', name: 'Salad', kind: 'hold', model: 'salad', side: 'left', z: 0.7, time: 0.7, gives: 'salad' },
+    { id: 'sauce', name: 'Garlic Sauce', kind: 'instant', model: 'sauce', side: 'left', z: 1.9, gives: 'sauce' },
+    { id: 'trays', name: 'Trays', kind: 'tray', model: 'trays', side: 'right', z: -1.7 },
+    { id: 'spit1', name: 'Döner Spit', kind: 'hold', model: 'spit', side: 'right', z: -0.5, time: 1.1, gives: 'kebab' },
+    { id: 'spit2', name: 'Döner Spit', kind: 'hold', model: 'spit', side: 'right', z: 0.7, time: 1.1, gives: 'kebab' },
+    { id: 'ayran', name: 'Ayran', kind: 'hold', model: 'ayran', side: 'right', z: 1.9, time: 0.8, gives: 'ayran' },
+    { id: 'slotL', name: 'Plate', kind: 'slot', model: 'slot', side: 'front', x: -1.3 },
+    { id: 'trash', name: 'Recycle', kind: 'trash', model: 'trash', side: 'front', x: 0 },
+    { id: 'slotR', name: 'Plate', kind: 'slot', model: 'slot', side: 'front', x: 1.3 },
+  ],
+  menu: {
+    doner: { name: 'Döner', price: 8, steps: ['bread', 'kebab', 'salad'] },
+    ayran: { name: 'Ayran', price: 3, steps: ['ayran'] },
+    durum: { name: 'Dürüm', price: 11, steps: ['yufka', 'kebab', 'salad', 'sauce'] },
+  },
+  unlocks: [
+    { at: 0, dishes: ['doner', 'ayran'] },
+    { at: 45, dishes: ['durum'] },
+  ],
+  compose: donerCompose,
+  dishId: donerDishId,
+};
+
+export const LEVEL_ORDER = ['sushi', 'street', 'burger', 'happy', 'austria', 'doner'];
 
 export const MODES = {
   score: { id: 'score', title: 'Score Attack', lives: 3 },

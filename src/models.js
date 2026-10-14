@@ -2401,7 +2401,75 @@ function sacherSlice(cream) {
   return g;
 }
 
+// Döner: a quarter of Turkish flatbread split open; whatever has gone in shows between the halves.
+function donerBread(meat, salad) {
+  const g = group(plate());
+  const wedge = (y, h, color) => {
+    const m = new THREE.Mesh(new THREE.CylinderGeometry(0.11, 0.11, h, 14, 1, false, -Math.PI / 4, Math.PI / 2), mat(color));
+    m.position.set(0, y, -0.05);
+    m.castShadow = true;
+    g.add(m);
+    return m;
+  };
+  wedge(0.037, 0.025, '#e2a75a');
+  const open = meat || salad;
+  let y = 0.05;
+  if (meat) {
+    for (const [x, z] of [[-0.03, 0.03], [0.02, 0.04], [0.0, 0.0], [0.035, 0.0]]) {
+      const shred = mesh(rbox(0.04, 0.014, 0.025, 0.005), '#8a4a26', x, 0.058, z);
+      shred.rotation.y = x * 20;
+      g.add(shred);
+    }
+    y += 0.014;
+  }
+  if (salad) {
+    for (const [x, z, c] of [[-0.04, 0.04, '#7cc142'], [0.03, 0.05, '#7cc142'], [0.0, 0.03, '#e2402f'], [-0.015, 0.055, '#8a2a6a']]) g.add(mesh(sph(0.016, 8, 6), c, x, y + 0.01, z));
+    put(g, mesh(sph(0.02, 8, 6), '#fbfaf2', 0.015, y + 0.022, 0.035)).scale.y = 0.4;
+    y += 0.016;
+  }
+  const top = wedge(y + 0.012 + (open ? 0.01 : 0), 0.025, '#d99a4c');
+  if (open) top.rotation.x = -0.18;
+  for (const [x, z] of [[-0.02, 0.0], [0.02, 0.02], [0.0, 0.04], [0.03, -0.01]]) g.add(mesh(sph(0.005, 6, 4), '#f6ecd0', x, top.position.y + 0.014 + z * 0.15, z));
+  return g;
+}
+
+// Dürüm: flat yufka on a plate while it's being filled, rolled up in paper once complete.
+function durumWrap(stage) {
+  const g = group(plate());
+  if (stage < 2) {
+    g.add(mesh(cyl(0.105, 0.105, 0.008, 24), '#ecd29c', 0, 0.03, 0));
+    for (const a of [0.4, 1.9, 3.3, 4.8]) put(g, mesh(sph(0.014, 6, 4), '#c9935a', Math.cos(a) * 0.06, 0.034, Math.sin(a) * 0.06)).scale.y = 0.2;
+    if (stage === 1) {
+      g.add(mesh(rbox(0.16, 0.018, 0.045, 0.008), '#8a4a26', 0, 0.042, 0));
+      for (const [x, c] of [[-0.05, '#7cc142'], [0.0, '#e2402f'], [0.05, '#7cc142']]) g.add(mesh(sph(0.013, 8, 6), c, x, 0.055, 0.008));
+    }
+    return g;
+  }
+  const roll = new THREE.Group();
+  roll.add(mesh(cyl(0.035, 0.035, 0.2, 16), '#ecd29c'));
+  roll.add(mesh(cyl(0.039, 0.039, 0.11, 16), '#f4f2ee', 0, -0.05, 0));
+  roll.add(mesh(cyl(0.0395, 0.0395, 0.015, 16), '#c8202a', 0, -0.02, 0));
+  roll.add(mesh(cyl(0.03, 0.03, 0.006, 12), '#8a4a26', 0, 0.1, 0));
+  for (const [x, z, c] of [[0.012, 0.01, '#7cc142'], [-0.012, -0.008, '#e2402f'], [0.0, 0.015, '#fbfaf2']]) roll.add(mesh(sph(0.009, 6, 4), c, x, 0.1, z));
+  roll.rotation.set(0, 0.5, Math.PI / 2 - 0.12);
+  roll.position.y = 0.06;
+  g.add(roll);
+  return g;
+}
+
 const DISH_BUILDERS = {
+  ekmek: () => donerBread(false, false),
+  doner_wip: () => donerBread(true, false),
+  doner: () => donerBread(true, true),
+  yufka: () => durumWrap(0),
+  durum_wip: () => durumWrap(1),
+  durum: () => durumWrap(2),
+  ayran() {
+    const g = cup('#f4f6f8', '#ffffff', 0.13, 0.048);
+    g.add(mesh(cyl(0.0495, 0.046, 0.03, 16), '#2d6fb5', 0, 0.06, 0));
+    put(g, mesh(sph(0.046, 12, 8), '#fffef8', 0, 0.13, 0)).scale.y = 0.35;
+    return g;
+  },
   rice: riceBowl,
   salmon_nigiri: () => nigiri('salmon'),
   tamago_nigiri: () => nigiri('tamago'),

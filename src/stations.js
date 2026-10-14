@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { mat, mesh, rbox, cyl, sph, dome, torus, cone, put, canvasTexture, texMat, buildTray, buildDish } from './models.js';
+import { mat, glow, mesh, rbox, cyl, sph, dome, torus, cone, put, canvasTexture, texMat, buildTray, buildDish } from './models.js';
 
 function steamPuffs(count = 6, color = 0xffffff) {
   const g = new THREE.Group();
@@ -645,6 +645,149 @@ const B = {
     whisk.rotation.z = -0.5;
     g.add(whisk);
     return { group: g };
+  },
+  flatbread() {
+    const g = new THREE.Group();
+    g.add(mesh(rbox(0.74, 0.05, 0.56, 0.02), '#c9a46a', 0, 0.025, 0));
+    for (let i = 0; i < 3; i++) {
+      const loaf = mesh(cyl(0.2, 0.21, 0.07, 24), i % 2 ? '#e2a75a' : '#d99a4c', -0.1 + i * 0.03, 0.09 + i * 0.075, -0.04 + i * 0.01);
+      loaf.scale.z = 0.85;
+      g.add(loaf);
+    }
+    for (let i = 0; i < 12; i++) {
+      const a = i * 2.4;
+      const r = 0.04 + (i % 4) * 0.035;
+      g.add(mesh(sph(0.011, 6, 4), i % 3 ? '#f6ecd0' : '#2a2620', -0.04 + Math.cos(a) * r, 0.278, -0.02 + Math.sin(a) * r * 0.85));
+    }
+    const wedge = new THREE.Mesh(new THREE.CylinderGeometry(0.17, 0.17, 0.08, 16, 1, false, -Math.PI / 4, Math.PI / 2), mat('#e2a75a'));
+    wedge.position.set(0.17, 0.09, 0.08);
+    wedge.castShadow = true;
+    g.add(wedge);
+    return { group: g };
+  },
+  yufka() {
+    const g = new THREE.Group();
+    g.add(mesh(rbox(0.74, 0.05, 0.56, 0.02), '#c9a46a', 0, 0.025, 0));
+    for (let i = 0; i < 8; i++) g.add(mesh(cyl(0.26, 0.26, 0.012, 28), i % 2 ? '#f1dcae' : '#ead09c', ((i % 3) - 1) * 0.01, 0.058 + i * 0.013, (i % 2) * 0.012));
+    for (let i = 0; i < 9; i++) {
+      const a = i * 2.1;
+      const spot = mesh(sph(0.022, 8, 6), '#c9935a', Math.cos(a) * (0.06 + (i % 3) * 0.05), 0.16, Math.sin(a) * (0.06 + (i % 3) * 0.05));
+      spot.scale.y = 0.15;
+      g.add(spot);
+    }
+    return { group: g };
+  },
+  salad() {
+    const g = new THREE.Group();
+    g.add(mesh(rbox(0.76, 0.12, 0.58, 0.03), '#c0c7cf', 0, 0.06, 0));
+    [['#7cc142', -0.17, -0.12], ['#e2402f', 0.17, -0.12], ['#f2e8ee', -0.17, 0.13], ['#8a2a6a', 0.17, 0.13]].forEach(([c, x, z], i) => {
+      g.add(mesh(rbox(0.32, 0.03, 0.23, 0.01), '#8a9098', x, 0.125, z));
+      for (let k = 0; k < 4; k++) {
+        const bit = mesh(sph(0.05, 8, 6), c, x + ((k % 2) - 0.5) * 0.12, 0.15, z + (k < 2 ? -0.05 : 0.05));
+        bit.scale.y = i === 0 ? 0.6 : 0.45;
+        g.add(bit);
+      }
+    });
+    const k = knife(0.3, 0.24);
+    g.add(k);
+    return { group: g, setState: chopAnim(k, 0.12) };
+  },
+  sauce() {
+    const g = new THREE.Group();
+    g.add(mesh(rbox(0.62, 0.04, 0.46, 0.02), '#c0c7cf', 0, 0.02, 0));
+    for (const [x, z, c] of [[-0.17, -0.08, '#f6f4ec'], [0.0, -0.1, '#f6f4ec'], [0.17, -0.06, '#d8322a']]) {
+      g.add(mesh(cyl(0.062, 0.066, 0.24, 14), c, x, 0.16, z));
+      g.add(mesh(cone(0.034, 0.09, 10), c, x, 0.325, z));
+      g.add(mesh(cyl(0.008, 0.008, 0.04, 6), '#c0c7cf', x, 0.385, z));
+    }
+    const bowlM = mesh(dome(0.1), '#e8eef2', 0.05, 0.1, 0.13);
+    bowlM.rotation.x = Math.PI;
+    g.add(bowlM);
+    put(g, mesh(sph(0.088, 14, 8), '#fbfaf2', 0.05, 0.095, 0.13)).scale.y = 0.3;
+    g.add(mesh(sph(0.014, 6, 4), '#4caf50', 0.07, 0.122, 0.12));
+    return { group: g };
+  },
+  spit() {
+    const g = new THREE.Group();
+    g.add(mesh(rbox(0.72, 0.08, 0.6, 0.03), '#c0c7cf', 0, 0.04, 0));
+    g.add(mesh(rbox(0.6, 0.02, 0.48, 0.01), '#9a6a3a', 0, 0.085, 0));
+    g.add(mesh(rbox(0.6, 1.08, 0.08, 0.03), '#3a3d48', 0, 0.62, -0.27));
+    const heat = new THREE.Mesh(new THREE.PlaneGeometry(0.46, 0.84), glow('#ff6a2a'));
+    heat.position.set(0, 0.62, -0.228);
+    g.add(heat);
+    for (let i = 0; i < 5; i++) g.add(mesh(rbox(0.46, 0.012, 0.012, 0.004), '#ffd27a', 0, 0.3 + i * 0.16, -0.22));
+    g.add(mesh(cyl(0.012, 0.012, 1.25, 8), '#d7dde2', 0, 0.64, 0.02));
+    g.add(mesh(cyl(0.06, 0.06, 0.02, 12), '#d7dde2', 0, 0.12, 0.02));
+    // the meat cone: wider at the top, grill-striped, turning on the skewer
+    const meatTex = canvasTexture(256, 256, (c, w, h) => {
+      c.fillStyle = '#9a5a2e';
+      c.fillRect(0, 0, w, h);
+      for (let y = 0; y < h; y += 10) {
+        c.fillStyle = y % 20 ? '#7a4220' : '#b0703a';
+        c.fillRect(0, y, w, 5);
+      }
+      for (let i = 0; i < 60; i++) {
+        c.fillStyle = i % 3 ? 'rgba(60,25,10,0.5)' : 'rgba(240,200,150,0.5)';
+        c.fillRect((i * 53) % w, (i * 97) % h, 14, 3);
+      }
+    });
+    const prof = [[0.0, 0.15], [0.1, 0.15], [0.13, 0.3], [0.16, 0.5], [0.19, 0.7], [0.2, 0.86], [0.18, 0.96], [0.0, 0.98]];
+    const meat = new THREE.Mesh(new THREE.LatheGeometry(prof.map(([r, y]) => new THREE.Vector2(r, y)), 24), texMat(meatTex));
+    meat.position.z = 0.02;
+    meat.castShadow = true;
+    g.add(meat);
+    g.add(mesh(cyl(0.05, 0.05, 0.05, 12), '#d7dde2', 0, 1.0, 0.02));
+    const blade = new THREE.Group();
+    blade.add(mesh(rbox(0.04, 0.16, 0.04, 0.012), '#2f2a36', 0, 0, 0));
+    blade.add(mesh(rbox(0.18, 0.05, 0.012, 0.004), '#e2e8ec', 0.1, 0.06, 0));
+    blade.position.set(0.12, 0.55, 0.26);
+    g.add(blade);
+    const shavings = steamPuffs(5, 0x9a5a2e);
+    shavings.position.set(0.05, 0.25, 0.22);
+    shavings.rotation.x = Math.PI;
+    g.add(shavings);
+    return {
+      group: g,
+      setState(st, t, active) {
+        meat.rotation.y = t * 0.7;
+        blade.position.y = active ? 0.55 + Math.sin(t * 7) * 0.22 : 0.55;
+        blade.rotation.z = active ? -0.3 : 0;
+        shavings.visible = active;
+        shavings.userData.tick(t * 1.4);
+      },
+    };
+  },
+  ayran() {
+    const g = new THREE.Group();
+    g.add(mesh(rbox(0.56, 0.34, 0.46, 0.04), '#e8eef2', 0, 0.17, -0.02));
+    g.add(mesh(rbox(0.5, 0.06, 0.06, 0.02), '#2d6fb5', 0, 0.26, 0.22));
+    const tank = new THREE.Mesh(cyl(0.2, 0.2, 0.42, 24), new THREE.MeshToonMaterial({ color: '#dff4ff', transparent: true, opacity: 0.35 }));
+    tank.position.set(0, 0.55, -0.04);
+    g.add(tank);
+    g.add(mesh(cyl(0.18, 0.18, 0.3, 24), '#f8f8f2', 0, 0.5, -0.04));
+    put(g, mesh(sph(0.18, 18, 8), '#ffffff', 0, 0.65, -0.04)).scale.y = 0.18;
+    g.add(mesh(cyl(0.205, 0.205, 0.03, 24), '#2d6fb5', 0, 0.77, -0.04));
+    const paddle = new THREE.Group();
+    paddle.add(mesh(cyl(0.01, 0.01, 0.3, 6), '#c0c7cf', 0, 0, 0));
+    paddle.add(mesh(rbox(0.22, 0.05, 0.01, 0.004), '#c0c7cf', 0, -0.1, 0));
+    paddle.position.set(0, 0.58, -0.04);
+    g.add(paddle);
+    put(g, mesh(cyl(0.025, 0.025, 0.12, 8), '#c0c7cf', 0, 0.34, 0.2)).rotation.x = Math.PI / 2;
+    g.add(mesh(cyl(0.02, 0.016, 0.07, 8), '#c0c7cf', 0, 0.3, 0.25));
+    const cupM = buildDish('ayran');
+    cupM.position.set(0, 0.0, 0.3);
+    cupM.scale.setScalar(1.3);
+    g.add(cupM);
+    const stream = new THREE.Mesh(cyl(0.012, 0.012, 0.12, 8), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.9 }));
+    stream.position.set(0, 0.22, 0.25);
+    g.add(stream);
+    return {
+      group: g,
+      setState(st, t, active) {
+        paddle.rotation.y = t * 2.5;
+        stream.visible = active;
+      },
+    };
   },
   slot() {
     const g = new THREE.Group();

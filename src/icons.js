@@ -22,6 +22,9 @@ const maki = (fill) => svg(`${plate}${roll(11, 19, 7.5, fill, 0.6)}${roll(24, 21
 const sacherSlice = (dx) =>
   `<g transform="translate(${dx} 0)"><path d="M5 22 L27 13 L31 16 L31 29 L5 29 Z" fill="#5a3220" stroke="#2a140a" stroke-width="1.5" stroke-linejoin="round"/><path d="M5 22 L27 13 L31 16 L5 25 Z" fill="#2a140a"/><path d="M5 26.5 h26" stroke="#f0a030" stroke-width="2"/><ellipse cx="21" cy="17" rx="3" ry="1.3" fill="#4a2414" stroke="#8a5a3a" stroke-width=".8"/></g>`;
 
+const breadBottom = '<path d="M5 28 L34 22 Q38 27 33 30 L7 32 Q4 31 5 28Z" fill="#e2a75a" stroke="#a8641e" stroke-width="1.5" stroke-linejoin="round"/>';
+const breadSeeds = '<g fill="#fff6dc"><ellipse cx="17" cy="21" rx="1.1" ry=".6"/><ellipse cx="24" cy="18" rx="1.1" ry=".6"/><ellipse cx="29" cy="20" rx="1.1" ry=".6"/><ellipse cx="21" cy="24" rx="1.1" ry=".6"/></g>';
+
 const ICONS = {
   rice: svg(`${plate}<ellipse cx="20" cy="25" rx="10" ry="6" fill="#fffdf6" stroke="#d9d3c3" stroke-width="1.5"/>`),
   salmon_nigiri: svg(`${plate}${rice}<rect x="6" y="12" width="28" height="10" rx="5" fill="#f47a45" stroke="#c4532a" stroke-width="1.5"/><path d="M13 13l-3 8M20 13l-3 8M27 13l-3 8" stroke="#ffd5be" stroke-width="2" stroke-linecap="round"/>`),
@@ -54,6 +57,14 @@ const ICONS = {
   coffee: svg(`<ellipse cx="18" cy="33" rx="14" ry="3.5" fill="#f7f4ee" stroke="#c9c2b4" stroke-width="1.5"/><path d="M8 15 h20 v10 q0 7 -7 7 h-6 q-7 0 -7 -7z" fill="#fff" stroke="#c9c2b4" stroke-width="1.5"/><ellipse cx="18" cy="15" rx="10" ry="2.8" fill="#5a3218"/><path d="M28 18 h3 a3 3 0 0 1 0 7 h-3" fill="none" stroke="#c9c2b4" stroke-width="2.5"/><path d="M14 10 q2 -3 0 -6 M21 10 q2 -3 0 -6" stroke="#cfd8dc" stroke-width="1.5" fill="none"/>`),
   milkshake: svg(`<path d="M12 15 h16 l-2.5 20 h-11 z" fill="#f8bbd0" stroke="#c2185b" stroke-width="1.5"/><path d="M10 15 q0 -7 10 -7 q10 0 10 7z" fill="#fff" stroke="#d9d3c3" stroke-width="1.5"/><circle cx="20" cy="6" r="3.2" fill="#d4182d"/><path d="M25 10 l5 -9" stroke="#4fc3f7" stroke-width="2.5" stroke-linecap="round"/>`),
   cake: svg(`${plate}<path d="M7 18 L30 11 L33 15 L33 27 L7 27 Z" fill="#f3d6a6" stroke="#c9a46a" stroke-width="1.5" stroke-linejoin="round"/><path d="M7 18 L30 11 L33 15 L7 21 Z" fill="#f7a6c8"/><path d="M7 23 h26" stroke="#f7a6c8" stroke-width="2"/><circle cx="29" cy="9" r="3" fill="#d4182d"/>`),
+  // döner bread side-on: closed, opened with meat, then stuffed
+  ekmek: svg(`${plate}<path d="M5 28 L32 13 Q40 19 35 28 Z" fill="#e2a75a" stroke="#a8641e" stroke-width="1.5" stroke-linejoin="round"/><path d="M7 27 L35 22" stroke="#c9852f" stroke-width="1.3"/>${breadSeeds}`),
+  doner_wip: svg(`${plate}${breadBottom}<path d="M7 26 L33 17 L35 23 L8 29Z" fill="#8a4a26"/><path d="M5 25 L30 10 Q38 13 35 18 L8 27 Z" fill="#d99a4c" stroke="#a8641e" stroke-width="1.5" stroke-linejoin="round"/>`),
+  doner: svg(`${plate}${breadBottom}<path d="M7 26 L33 16 L35 23 L8 29Z" fill="#8a4a26"/><path d="M8 25 l3 -4 l3 2 l3 -5 l3 2 l3 -5 l3 2 l3 -5 l3 1 l2 5z" fill="#7cc142"/><circle cx="19" cy="20" r="2.3" fill="#e2402f"/><circle cx="27" cy="16.5" r="2.3" fill="#e2402f"/><path d="M4 23 L29 6 Q37 8 35 13 L8 24 Z" fill="#d99a4c" stroke="#a8641e" stroke-width="1.5" stroke-linejoin="round"/><path d="M17 15 q1 4 0 6 M24 11 q1 4 0 5" stroke="#fffdf4" stroke-width="2" stroke-linecap="round"/>`),
+  yufka: svg(`${plate}<ellipse cx="20" cy="26" rx="15" ry="6" fill="#ecd29c" stroke="#b8925a" stroke-width="1.4"/><g fill="#c9935a"><ellipse cx="13" cy="25" rx="1.6" ry=".8"/><ellipse cx="22" cy="23.5" rx="1.4" ry=".7"/><ellipse cx="27" cy="27" rx="1.6" ry=".8"/><ellipse cx="17" cy="28.5" rx="1.2" ry=".6"/></g>`),
+  durum_wip: svg(`${plate}<ellipse cx="20" cy="26" rx="15" ry="6" fill="#ecd29c" stroke="#b8925a" stroke-width="1.4"/><rect x="9" y="23" width="22" height="5" rx="2.5" fill="#8a4a26"/><circle cx="13" cy="23.5" r="1.8" fill="#7cc142"/><circle cx="19" cy="23" r="1.8" fill="#e2402f"/><circle cx="25" cy="23.5" r="1.8" fill="#7cc142"/>`),
+  durum: svg(`${plate}<g transform="rotate(-38 20 20)"><rect x="4" y="15" width="32" height="11" rx="5.5" fill="#ecd29c" stroke="#b8925a" stroke-width="1.4"/><rect x="4" y="14.5" width="17" height="12" rx="3" fill="#f4f2ee" stroke="#b8b0a0" stroke-width="1.2"/><rect x="17" y="14.5" width="3" height="12" fill="#c8202a"/><ellipse cx="35" cy="20.5" rx="2.8" ry="5" fill="#8a4a26"/><circle cx="35" cy="18" r="1.4" fill="#7cc142"/><circle cx="35.4" cy="22.4" r="1.3" fill="#e2402f"/></g>`),
+  ayran: svg(`<path d="M12 10 h16 l-2 25 h-12 z" fill="#f8f8f4" stroke="#b8c0c8" stroke-width="1.5"/><path d="M12.6 17 h14.8 l-.5 6 h-13.8z" fill="#2d6fb5"/><ellipse cx="20" cy="10" rx="8.5" ry="2.6" fill="#ffffff" stroke="#d8dde2" stroke-width="1.2"/><circle cx="17" cy="9.4" r="1.2" fill="#eef2f4"/><circle cx="22" cy="10.4" r="1" fill="#eef2f4"/>`),
 };
 
 export function dishIcon(id) {
@@ -76,6 +87,11 @@ const STEPS = {
   fry: svg(`<ellipse cx="17" cy="24" rx="13" ry="6" fill="#2b2b33" stroke="#111" stroke-width="1.5"/><ellipse cx="17" cy="23" rx="10" ry="4" fill="#f2b632"/><path d="M29 22 l9 -5" stroke="#3a2a20" stroke-width="3.5" stroke-linecap="round"/><g fill="#fff4c0"><circle cx="13" cy="22" r="1.2"/><circle cx="19" cy="24" r="1"/><circle cx="21" cy="21" r="1.3"/></g><path d="M12 15 q2 -3 0 -6 M19 14 q2 -3 0 -6" stroke="#cfd8dc" stroke-width="1.5" fill="none"/>`),
   cream: svg(`<path d="M7 22 h26 q-1 11 -13 11 q-12 0 -13 -11z" fill="#c8d6de" stroke="#7a8a94" stroke-width="1.5"/><path d="M9 22 q-2 -7 5 -8 q1 -7 7 -6 q6 -2 7 4 q6 1 4 10z" fill="#fffdf8" stroke="#bdb39c" stroke-width="1.4"/>`),
 };
+
+STEPS.bread = ICONS.ekmek;
+STEPS.kebab = svg(`<rect x="19" y="2" width="2.4" height="36" rx="1" fill="#c0c7cf"/><path d="M10 7 h20 l-4 25 h-12z" fill="#9a5a2e" stroke="#5a2e12" stroke-width="1.5" stroke-linejoin="round"/><path d="M11.5 12 h17 M12.5 18 h15 M13.5 24 h13" stroke="#7a4220" stroke-width="2.2"/><path d="M28 30 q4 1 5 4 M30 26 q4 0 6 3" stroke="#9a5a2e" stroke-width="2.4" fill="none" stroke-linecap="round"/>`);
+STEPS.salad = svg(`<circle cx="13" cy="19" r="5" fill="#7cc142"/><circle cx="20" cy="16" r="5" fill="#93d65a"/><circle cx="27" cy="19" r="5" fill="#7cc142"/><circle cx="17" cy="20" r="3" fill="#e2402f"/><circle cx="25" cy="18" r="2.6" fill="#8a2a6a"/><path d="M6 20 h28 q-2 13 -14 13 q-12 0 -14 -13z" fill="#e8eef2" stroke="#8a9098" stroke-width="1.5"/>`);
+STEPS.sauce = svg(`<path d="M16 13 l4 -9 l4 9z" fill="#f6f4ec" stroke="#b8b0a0" stroke-width="1.3" stroke-linejoin="round"/><rect x="12" y="12" width="16" height="24" rx="4" fill="#f6f4ec" stroke="#b8b0a0" stroke-width="1.5"/><rect x="12" y="20" width="16" height="8" fill="#7cc142"/><path d="M18 22 q2 -2 4 0 q1 3 -2 4 q-3 -1 -2 -4z" fill="#ffffff"/>`);
 
 export function stepIcon(id) {
   return STEPS[id] || ICONS[id] || ICONS.rice;

@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { mat, glow, mesh, rbox, cyl, sph, dome, torus, cone, put, canvasTexture, texMat, buildDish } from './models.js';
+import { dishIcon } from './icons.js';
 
 export const KITCHEN = {
   minX: -2.72,
@@ -1169,6 +1170,201 @@ export function buildWirtshaus(scene) {
     tick(t) {
       flags.forEach((f, i) => (f.rotation.x = Math.sin(t * 1.8 + i) * 0.25));
       lamps.forEach((l, i) => (l.rotation.z = Math.sin(t * 1.1 + i) * 0.03));
+    },
+  };
+}
+
+// Draws an order icon onto a canvas texture once the SVG has decoded.
+function svgOnto(tex, svgStr, x, y, size) {
+  const img = new Image();
+  img.onload = () => {
+    tex.image.getContext('2d').drawImage(img, x, y, size, size);
+    tex.needsUpdate = true;
+  };
+  img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svgStr.replace('<svg ', '<svg width="256" height="256" '));
+}
+
+const nazar = () => {
+  const g = new THREE.Group();
+  [[0.2, '#1a4fb0'], [0.14, '#ffffff'], [0.09, '#6fb8e8'], [0.045, '#111111']].forEach(([r, c], i) => {
+    const d = mesh(cyl(r, r, 0.03, 24), c, 0, 0, i * 0.006);
+    d.rotation.x = Math.PI / 2;
+    g.add(d);
+  });
+  g.add(mesh(cyl(0.006, 0.006, 0.6, 4), '#c8202a', 0, 0.5, 0));
+  return g;
+};
+
+const teaGlass = () => {
+  const g = new THREE.Group();
+  g.add(mesh(cyl(0.09, 0.09, 0.015, 14), '#c8202a', 0, 0.008, 0));
+  const glass = new THREE.Mesh(
+    new THREE.LatheGeometry([[0.035, 0], [0.03, 0.04], [0.026, 0.07], [0.034, 0.12], [0.036, 0.13]].map(([r, y]) => new THREE.Vector2(r, y)), 12),
+    new THREE.MeshToonMaterial({ color: '#b5541c', transparent: true, opacity: 0.85 }),
+  );
+  glass.position.y = 0.015;
+  g.add(glass);
+  g.scale.setScalar(1.8);
+  return g;
+};
+
+export function buildDoner(scene) {
+  lights(scene, { bg: '#24120f', sky: '#fff0e0', ground: '#5a2a1e', hemi: 1.0, warm: '#ffd29a', warmInt: 30 });
+  const steel = canvasTexture(128, 128, (c, w) => {
+    c.fillStyle = '#cfd5db';
+    c.fillRect(0, 0, w, w);
+    c.fillStyle = 'rgba(255,255,255,0.18)';
+    for (let y = 0; y < w; y += 3) c.fillRect(0, y, w, 1);
+    c.fillStyle = 'rgba(0,0,0,0.05)';
+    for (let i = 0; i < 40; i++) c.fillRect(rnd() * w, rnd() * w, 18, 1);
+  });
+  const wallTiles = canvasTexture(128, 128, (c, w) => {
+    c.fillStyle = '#d9d6cf';
+    c.fillRect(0, 0, w, w);
+    c.fillStyle = '#f7f5f0';
+    for (let y = 0; y < 4; y++) for (let x = 0; x < 4; x++) c.fillRect(x * 32 + 1.5, y * 32 + 1.5, 29, 29);
+  });
+  kitchenBase(scene, {
+    pit: checkerTex('#ebe8e1', '#d5d1c8', 4),
+    pitScale: 1.0,
+    deck: steel,
+    shelf: steel,
+    deckSide: '#c8202a',
+    rim: '#8a9098',
+    counter: '#d7dde2',
+    counterSide: '#c8202a',
+    outer: checkerTex('#8a3a2a', '#7a3224', 2),
+    outerScale: 1.6,
+    street: checkerTex('#8a3a2a', '#7a3224', 2),
+    streetScale: 1.6,
+    glow: '#ffe0a0',
+  });
+
+  const wall = new THREE.Mesh(new THREE.BoxGeometry(30, 7, 0.3), texMat(tiled(wallTiles, 30, 7)));
+  wall.position.set(0, 3.5, -7.2);
+  scene.add(wall);
+  scene.add(mesh(new THREE.BoxGeometry(30, 1.0, 0.34), '#c8202a', 0, 0.5, -7.18));
+  scene.add(mesh(new THREE.BoxGeometry(30, 0.1, 0.36), '#f2c230', 0, 1.02, -7.16));
+
+  const signTex = canvasTexture(512, 128, (c, w, h) => {
+    c.fillStyle = '#c8202a';
+    c.fillRect(0, 0, w, h);
+    c.fillStyle = '#f2c230';
+    c.fillRect(0, 0, w, 10);
+    c.fillRect(0, h - 10, w, 10);
+    c.font = 'bold 78px "Lilita One", "Fredoka", sans-serif';
+    c.textAlign = 'center';
+    c.textBaseline = 'middle';
+    c.lineWidth = 10;
+    c.strokeStyle = '#7a0f14';
+    c.strokeText('DÖNER KEBAB', w / 2, h / 2 + 4);
+    c.fillStyle = '#ffd84a';
+    c.fillText('DÖNER KEBAB', w / 2, h / 2 + 4);
+  });
+  const red = mat('#a8161f');
+  const sign = new THREE.Mesh(new THREE.BoxGeometry(5.2, 1.3, 0.14), [red, red, red, red, texMat(signTex, { emissive: '#ffffff', emissiveIntensity: 0.35 }), red]);
+  sign.position.set(0, 5.15, -7.0);
+  scene.add(sign);
+
+  // backlit menu boards with the real order icons
+  [['doner', 'Döner', '$8'], ['durum', 'Dürüm', '$11'], ['ayran', 'Ayran', '$3']].forEach(([id, name, price], i) => {
+    const tex = canvasTexture(256, 256, (c, w, h) => {
+      c.fillStyle = '#2a1410';
+      c.fillRect(0, 0, w, h);
+      c.strokeStyle = '#f2c230';
+      c.lineWidth = 6;
+      c.strokeRect(6, 6, w - 12, h - 12);
+      c.textAlign = 'center';
+      c.fillStyle = '#ffd84a';
+      c.font = 'bold 36px "Fredoka", sans-serif';
+      c.fillText(name, w / 2, 204);
+      c.fillStyle = '#ffffff';
+      c.font = 'bold 28px "Fredoka", sans-serif';
+      c.fillText(price, w / 2, 238);
+    });
+    svgOnto(tex, dishIcon(id), 52, 14, 152);
+    const x = -2.3 + i * 2.3;
+    const board = new THREE.Mesh(new THREE.PlaneGeometry(1.5, 1.5), texMat(tex, { emissive: '#ffffff', emissiveIntensity: 0.3 }));
+    board.position.set(x, 3.6, -5.2);
+    scene.add(board);
+    for (const dx of [-0.6, 0.6]) scene.add(mesh(cyl(0.01, 0.01, 1.0, 4), '#222', x + dx, 4.85, -5.2));
+  });
+
+  const charms = [];
+  for (const [x, y, z] of [[-4.2, 3.6, -6.9], [4.2, 3.6, -6.9], [-3.4, 3.2, -6.9], [3.4, 3.2, -6.9], [-5.8, 3.4, -2.2], [5.8, 3.4, -2.2]]) {
+    const n = nazar();
+    n.position.set(x, y, z);
+    scene.add(n);
+    charms.push(n);
+  }
+
+  const mosaic = canvasTexture(128, 64, (c, w, h) => {
+    const cols = ['#e2402f', '#f2c230', '#2d6fb5', '#3fb3a8', '#e8501c', '#9b4fd6'];
+    c.fillStyle = '#3a2410';
+    c.fillRect(0, 0, w, h);
+    for (let y = 0; y < h; y += 8) for (let x = 0; x < w; x += 8) {
+      c.fillStyle = cols[((x * 7 + y * 3) / 8) % 6 | 0];
+      c.fillRect(x + 1, y + 1, 6, 6);
+    }
+  });
+  const lamps = [];
+  for (const x of [-2.4, 0, 2.4]) {
+    scene.add(mesh(cyl(0.01, 0.01, 1.0, 4), '#8a6a3a', x, 4.4, -3.0));
+    const lamp = new THREE.Group();
+    lamp.position.set(x, 3.75, -3.0);
+    lamp.add(new THREE.Mesh(sph(0.26, 18, 12), texMat(mosaic, { emissive: '#ffffff', emissiveIntensity: 0.6 })));
+    lamp.add(mesh(cone(0.1, 0.12, 12), '#b8862a', 0, 0.3, 0));
+    lamp.add(mesh(sph(0.04, 8, 6), '#b8862a', 0, -0.28, 0));
+    scene.add(lamp);
+    lamps.push(lamp);
+  }
+
+  scene.add(wallShelf(-4.8, 2.5, -6.9, 2.4, [teaGlass, teaGlass, teaGlass, teaGlass, teaGlass]));
+  scene.add(wallShelf(4.8, 2.5, -6.9, 2.4, [teaGlass, teaGlass, teaGlass, teaGlass, teaGlass]));
+  placeOnPass(scene, [bottles('#f6f4ec'), cups('#f4f6f8'), plates('#f7f4ee'), bottles('#d8322a', 2), bowl('#e8eef2')]);
+
+  const fridge = (x) => {
+    const g = new THREE.Group();
+    g.add(mesh(rbox(1.2, 2.2, 0.8, 0.06), '#e8eef2', 0, 1.1, 0));
+    g.add(mesh(rbox(1.0, 1.8, 0.05, 0.02), '#9fd6f0', 0, 1.2, 0.38));
+    for (let r = 0; r < 3; r++)
+      for (let k = 0; k < 4; k++) {
+        const item = k % 2 ? buildDish('ayran') : buildDish('cola');
+        item.scale.setScalar(1.6);
+        item.position.set(-0.33 + k * 0.22, 0.48 + r * 0.55, 0.3);
+        g.add(item);
+      }
+    g.add(mesh(rbox(1.0, 0.18, 0.06, 0.02), '#c8202a', 0, 2.1, 0.4));
+    g.position.set(x, 0, -5.6);
+    return g;
+  };
+  scene.add(fridge(-6.4), fridge(6.4));
+
+  const table = (x, z) => {
+    const g = new THREE.Group();
+    g.add(mesh(cyl(0.3, 0.34, 0.04, 20), '#3a3d48', 0, 0.02, 0));
+    g.add(mesh(cyl(0.05, 0.05, 1.05, 10), '#3a3d48', 0, 0.55, 0));
+    g.add(mesh(cyl(0.55, 0.55, 0.05, 28), '#d7dde2', 0, 1.08, 0));
+    put(g, mesh(torus(0.55, 0.02, 28), '#c8202a', 0, 1.08, 0)).rotation.x = Math.PI / 2;
+    for (const [id, dx, dz] of [['doner', -0.18, 0.05], ['ayran', 0.2, -0.1], ['durum', 0.1, 0.25]]) {
+      const d = buildDish(id);
+      d.scale.setScalar(2);
+      d.position.set(dx, 1.11, dz);
+      g.add(d);
+    }
+    g.position.set(x, 0, z);
+    return g;
+  };
+  scene.add(table(-7.4, -0.6), table(7.4, -0.6), table(-7.6, 2.8), table(7.6, 2.8));
+
+  return {
+    tick(t) {
+      charms.forEach((n, i) => (n.rotation.z = Math.sin(t * 1.4 + i) * 0.12));
+      lamps.forEach((l, i) => {
+        l.rotation.z = Math.sin(t * 1.1 + i) * 0.04;
+        l.rotation.y = t * 0.2;
+      });
+      sign.material[4].emissiveIntensity = 0.32 + Math.sin(t * 3) * 0.06;
     },
   };
 }
