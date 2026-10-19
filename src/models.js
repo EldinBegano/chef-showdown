@@ -619,6 +619,10 @@ function paintMouth(c, x, y, kind, o) {
       c.lineTo(x + k * mw * 0.24, y + 5);
       c.stroke();
     }
+    if (o.toothGap) {
+      c.fillStyle = o.mouthIn || '#5a1a1a';
+      c.fillRect(x - 2.5, y - 3, 5, 9);
+    }
     c.restore();
     c.lineWidth = 3;
     path();
@@ -705,6 +709,18 @@ function paintFace(c, expr, o) {
         c.moveTo(cx - o.ew * 1.1, by + 5);
         c.quadraticCurveTo(cx, by - 7, cx + o.ew * 1.1, by + 5);
       }
+      c.stroke();
+    }
+  }
+  if (o.laugh) {
+    // smile lines from beside the nose down past the mouth corners
+    const mw = o.mouthW || 16;
+    c.strokeStyle = o.laugh;
+    c.lineWidth = 4;
+    for (const side of [-1, 1]) {
+      c.beginPath();
+      c.moveTo(256 + side * mw * 0.95, o.mouthY - 32);
+      c.quadraticCurveTo(256 + side * mw * 1.35, o.mouthY - 8, 256 + side * mw * 1.2, o.mouthY + 14);
       c.stroke();
     }
   }
@@ -1650,6 +1666,238 @@ function buildFranklyn() {
   return h;
 }
 
+// Head sphere widened toward the jaw, for fuller faces without a seam across the cheeks.
+const jowlGeo = (k) =>
+  cached(`jowl${k}`, () => {
+    const g = new THREE.SphereGeometry(0.27, 32, 24);
+    const pos = g.attributes.position;
+    for (let i = 0; i < pos.count; i++) pos.setX(i, pos.getX(i) * (1 + k * THREE.MathUtils.clamp(-pos.getY(i) / 0.27, 0, 1)));
+    g.computeVertexNormals();
+    return g;
+  });
+
+// Kim Jong Un: dark Mao suit, round face, flat-top with shaved sides, waving to the crowd.
+function buildKim() {
+  const skin = '#f0c9a4';
+  const suit = '#2c2d33';
+  const hair = '#151317';
+  const h = humanoid({
+    skin,
+    scale: 0.97,
+    outfitKey: 'kim',
+    outfit: (c, w, hgt) => {
+      c.fillStyle = suit;
+      c.fillRect(0, 0, w, hgt);
+      c.fillStyle = 'rgba(0,0,0,0.12)';
+      c.fillRect(0, 0, w, 22);
+      c.strokeStyle = 'rgba(0,0,0,0.4)';
+      c.lineWidth = 3;
+      c.beginPath();
+      c.moveTo(w / 2, 0);
+      c.lineTo(w / 2, hgt);
+      c.stroke();
+      // four patch pockets, each with a pointed buttoned flap
+      for (const [x, y, pw, ph] of [[w / 2 - 78, 58, 54, 52], [w / 2 + 78, 58, 54, 52], [w / 2 - 92, 162, 70, 70], [w / 2 + 92, 162, 70, 70]]) {
+        c.strokeStyle = 'rgba(255,255,255,0.1)';
+        c.lineWidth = 2;
+        c.strokeRect(x - pw / 2, y, pw, ph);
+        c.fillStyle = 'rgba(0,0,0,0.3)';
+        c.beginPath();
+        c.moveTo(x - pw / 2 - 3, y - 2);
+        c.lineTo(x + pw / 2 + 3, y - 2);
+        c.lineTo(x + pw / 2 + 3, y + 12);
+        c.lineTo(x, y + 19);
+        c.lineTo(x - pw / 2 - 3, y + 12);
+        c.closePath();
+        c.fill();
+        c.fillStyle = '#1a1a1e';
+        c.beginPath();
+        c.arc(x, y + 12, 4, 0, TAU);
+        c.fill();
+      }
+    },
+    sleeves: suit,
+    pants: suit,
+    shoes: '#141418',
+    sole: '#2a2a30',
+  });
+  const { rig } = h;
+  const { head, body, B } = rig;
+  // stocky: a wider, deeper torso
+  rig.torso.scale.set(1.1, 1, 0.78);
+  for (const y of [40, 82, 124, 166, 208]) stick(rig, mesh(sph(0.018, 10, 8), '#18181c'), 256, y).scale.z = 0.4;
+  // tall Mao collar standing up around the neck
+  const band = mesh(cyl(B.neck * 1.42, B.neck * 1.58, 0.12, 24), suit, 0, 1.23, 0.005);
+  band.scale.z = 0.9;
+  body.add(band);
+
+  head.scale.set(1.08, 1, 1.04);
+  head.children[0].geometry = jowlGeo(0.4);
+  for (const x of [-0.262, 0.262]) {
+    const ear = mesh(sph(0.055, 10, 8), skin, x, 0.0, -0.01);
+    ear.scale.set(0.55, 1, 0.8);
+    head.add(ear);
+  }
+  const nose = bare(mesh(sph(0.03, 12, 10), '#ebbb96', 0, -0.03, 0.266));
+  nose.scale.set(1.3, 0.8, 0.7);
+  head.add(nose);
+
+  // shaved sides and back: a dark stubble shell open over the face
+  const shaved = new THREE.Mesh(new THREE.SphereGeometry(0.279, 32, 16, Math.PI / 2 + 0.85, TAU - 1.7, 0, 1.5), mat('#54463f'));
+  head.add(shaved);
+  // the flat-top, a little higher at the front
+  const top = mesh(rbox(0.38, 0.26, 0.54, 0.12), hair, 0, 0.2, -0.03);
+  top.rotation.x = -0.1;
+  head.add(top);
+  const front = mesh(sph(0.14, 18, 12), hair, 0, 0.24, 0.12);
+  front.scale.set(1.3, 0.8, 0.9);
+  head.add(front);
+
+  face(rig, 'kim', {
+    eyeY: 106, gap: 76, ew: 16, eh: 13, sleepy: 0.3,
+    brow: '#1a1416', browY: 74, browW: 7,
+    blush: 'rgba(225,120,100,0.25)',
+    mouth: 'smile', mouthY: 200, mouthW: 14, lip: '#8a4a42',
+  });
+  rig.idle = 'wave';
+  return h;
+}
+
+// Repeatable 0..1 noise for scattering texture details.
+const hash = (i) => {
+  const r = Math.sin(i * 12.9898) * 43758.5453;
+  return r - Math.floor(r);
+};
+
+// Mr Stütz: grey tweed blazer over a black tee, swept-back greying hair and a big gap-toothed grin.
+function buildStuetz() {
+  const skin = '#efc2a2';
+  const tweed = '#727379';
+  const lapel = '#7e7f85';
+  const tee = '#1c1c20';
+  const hair = '#8c8178';
+  const grey = '#b3aca4';
+  const h = humanoid({
+    skin,
+    outfitKey: 'stuetz',
+    outfit: (c, w, hgt) => {
+      c.fillStyle = tweed;
+      c.fillRect(0, 0, w, hgt);
+      // flecked tweed
+      for (let i = 0; i < 1600; i++) {
+        c.fillStyle = i % 2 ? 'rgba(255,255,255,0.09)' : 'rgba(0,0,0,0.1)';
+        c.fillRect(hash(i) * w, hash(i + 5000) * hgt, 3, 2);
+      }
+      c.fillStyle = 'rgba(0,0,0,0.1)';
+      c.fillRect(0, 0, w, 22);
+      // black tee in the open front, and again where the fronts cut away under the button
+      c.fillStyle = tee;
+      c.beginPath();
+      c.moveTo(w / 2 - 66, 0);
+      c.lineTo(w / 2 + 66, 0);
+      c.lineTo(w / 2 + 9, 168);
+      c.lineTo(w / 2 + 46, hgt);
+      c.lineTo(w / 2 - 46, hgt);
+      c.lineTo(w / 2 - 9, 168);
+      c.closePath();
+      c.fill();
+      for (const s of [-1, 1]) {
+        // notched lapel rolling down to the single button
+        c.fillStyle = lapel;
+        c.beginPath();
+        c.moveTo(w / 2 + s * 66, 0);
+        c.lineTo(w / 2 + s * 9, 168);
+        c.lineTo(w / 2 + s * 118, 52);
+        c.lineTo(w / 2 + s * 100, 44);
+        c.lineTo(w / 2 + s * 98, 0);
+        c.closePath();
+        c.fill();
+        c.strokeStyle = 'rgba(0,0,0,0.45)';
+        c.lineWidth = 4;
+        c.beginPath();
+        c.moveTo(w / 2 + s * 9, 168);
+        c.lineTo(w / 2 + s * 118, 52);
+        c.lineTo(w / 2 + s * 100, 44);
+        c.stroke();
+        // hip pocket flap
+        c.beginPath();
+        c.moveTo(w / 2 + s * 72, 200);
+        c.lineTo(w / 2 + s * 140, 196);
+        c.stroke();
+      }
+      // breast pocket
+      c.beginPath();
+      c.moveTo(w / 2 + 128, 84);
+      c.lineTo(w / 2 + 176, 80);
+      c.stroke();
+    },
+    sleeves: tweed,
+    pants: '#2e2f36',
+    shoes: '#2a211c',
+  });
+  const { rig } = h;
+  const { head, body } = rig;
+  collar(rig, tee);
+  stick(rig, mesh(sph(0.02, 10, 8), '#2a2a2e'), 256, 170).scale.z = 0.4;
+  // blazer collar standing up behind the neck
+  put(body, mesh(torus(0.105, 0.028, 20, Math.PI * 1.25), tweed, 0, 1.25, -0.005)).rotation.set(-Math.PI / 2, 0, -Math.PI * 0.125);
+
+  head.scale.set(1.03, 1.02, 1);
+  head.children[0].geometry = jowlGeo(0.2);
+  for (const x of [-0.268, 0.268]) {
+    const ear = mesh(sph(0.06, 10, 8), skin, x, -0.01, -0.01);
+    ear.scale.set(0.5, 1.05, 0.8);
+    head.add(ear);
+  }
+  const nose = bare(mesh(sph(0.033, 12, 10), '#eeb9a0', 0, -0.028, 0.268));
+  nose.scale.set(1.05, 1, 0.75);
+  head.add(nose);
+
+  // short hair brushed up and back off a high forehead, grey at the temples
+  const back = mesh(sph(0.27, 24, 16), hair, 0, 0.02, -0.035);
+  head.add(back);
+  // brushed strands run along the dome's meridians, from the hairline (bottom of the canvas) to the crown
+  const strands = canvasTexture(256, 128, (c, w, hh) => {
+    c.fillStyle = hair;
+    c.fillRect(0, 0, w, hh);
+    c.lineCap = 'round';
+    for (let i = 0; i < 260; i++) {
+      const x = hash(i) * w;
+      const len = 40 + hash(i + 300) * 80;
+      c.strokeStyle = i % 3 ? 'rgba(235,228,220,0.16)' : 'rgba(40,30,25,0.22)';
+      c.lineWidth = 2 + hash(i + 600) * 2;
+      c.beginPath();
+      c.moveTo(x, hh);
+      c.lineTo(x + (hash(i + 900) - 0.5) * 12, hh - len);
+      c.stroke();
+    }
+  });
+  const cap = mesh(dome(0.286), texMat(strands), 0, 0.05, -0.05);
+  cap.rotation.x = -0.38;
+  cap.scale.y = 1.08;
+  head.add(cap);
+  for (const x of [-0.215, 0.215]) {
+    const temple = mesh(sph(0.11, 12, 10), grey, x, 0.05, 0.0);
+    temple.scale.set(0.45, 1, 1.15);
+    head.add(temple);
+  }
+  // a few strays sticking out at the crown
+  [[0.12, 0.25, -0.13, 0.5, -0.9], [0.16, 0.2, -0.17, 0.4, -1.3]].forEach(([x, y, z, rz, rx]) => {
+    const stray = mesh(cone(0.016, 0.09, 6), grey, x, y, z);
+    stray.rotation.set(rx, 0, rz);
+    head.add(stray);
+  });
+
+  face(rig, 'stuetz', {
+    style: 'anime', eyeY: 104, gap: 80, ew: 19, eh: 16, lid: 8, sleepy: 0.35,
+    iris: ['#2b3440', '#56687a', '#a2b2c0'], pupil: '#151b22',
+    brow: '#7a6c60', browY: 68, browW: 9,
+    blush: 'rgba(230,110,100,0.3)', laugh: 'rgba(170,90,70,0.4)',
+    mouth: 'grin', happyMouth: 'grin', toothGap: true, mouthY: 198, mouthW: 52, lip: '#9a5244', mouthIn: '#6a2626',
+  });
+  return h;
+}
+
 export const CHARACTERS = [
   {
     id: 'morel', name: 'Chef Morel', level: 1, tier: 'free',
@@ -1934,6 +2182,14 @@ export const CHARACTERS = [
   {
     id: 'franklyn', name: 'Mr Franklyn', level: 9, tier: 'gold',
     build: buildFranklyn,
+  },
+  {
+    id: 'kim', name: 'Kim Jong Un', level: 10, tier: 'gold',
+    build: buildKim,
+  },
+  {
+    id: 'stuetz', name: 'Mr Stütz', level: 11, tier: 'gold',
+    build: buildStuetz,
   },
 ];
 
