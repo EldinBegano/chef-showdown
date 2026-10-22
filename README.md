@@ -43,6 +43,11 @@ Your mate must be able to reach port 5200 on your machine:
 
 For development run `npm run dev` and `npm run server` side by side; Vite proxies `/ws` to the relay.
 
+### Docker
+Pushes to `main` publish `ghcr.io/eldinbegano/chef-showdown` (amd64 + arm64) via GitHub Actions; `v*` tags also get a version tag. See `compose.yaml`.
+
+To host under a path prefix, set `BASE_PATH` (e.g. `/chef-showdown`) and have the reverse proxy forward that prefix unchanged, WebSocket upgrades included. The game is then at `https://your.domain/chef-showdown/`, relay at `/chef-showdown/ws`.
+
 ## Controls
 Up to 4 players on one machine: click **+** next to your chef in the lobby (or press **A** on a gamepad) to add a player, then click their **Controls** pill to pick a layout.
 

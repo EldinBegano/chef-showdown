@@ -11,7 +11,9 @@ export class Net {
 
   connect() {
     return new Promise((resolve, reject) => {
-      const url = `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws`;
+      // Relative to the page so it keeps any path prefix (/ws or /prefix/ws).
+      const url = new URL('ws', location.href);
+      url.protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
       const ws = new WebSocket(url);
       this.ws = ws;
       let opened = false;

@@ -1,6 +1,8 @@
 import { defineConfig } from 'vite';
 
 export default defineConfig({
+  // Relative asset URLs so the same build works at / or under a path prefix.
+  base: './',
   server: {
     port: 5199,
     host: true,

@@ -4,6 +4,8 @@ import { extname, join, resolve, sep } from 'node:path';
 import { WebSocketServer } from 'ws';
 
 const PORT = Number(process.env.PORT) || 5200;
+// Optional path prefix when hosted behind a reverse proxy, e.g. BASE_PATH=/chef-showdown
+const BASE = (process.env.BASE_PATH || '').replace(/^\/*/, '/').replace(/\/+$/, '');
 const ROOT = resolve(import.meta.dirname, '..', 'dist');
 const MAX_PLAYERS = 4;
 const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -21,7 +23,15 @@ const TYPES = {
 
 const server = http.createServer(async (req, res) => {
   try {
-    const { pathname } = new URL(req.url, 'http://localhost');
+    let { pathname, search } = new URL(req.url, 'http://localhost');
+    if (BASE) {
+      // Assets are relative, so the prefix needs its trailing slash.
+      if (pathname === BASE) {
+        res.writeHead(301, { location: `${BASE}/${search}` }).end();
+        return;
+      }
+      if (pathname.startsWith(BASE + '/')) pathname = pathname.slice(BASE.length);
+    }
     let file = resolve(join(ROOT, decodeURIComponent(pathname)));
     if (file !== ROOT && !file.startsWith(ROOT + sep)) {
       res.writeHead(403).end();
@@ -41,7 +51,12 @@ const server = http.createServer(async (req, res) => {
   }
 });
 
-const wss = new WebSocketServer({ server, path: '/ws', maxPayload: 256 * 1024 });
+const wss = new WebSocketServer({ noServer: true, maxPayload: 256 * 1024 });
+server.on('upgrade', (req, socket, head) => {
+  const { pathname } = new URL(req.url, 'http://localhost');
+  if (pathname !== '/ws' && pathname !== `${BASE}/ws`) return socket.destroy();
+  wss.handleUpgrade(req, socket, head, (ws) => wss.emit('connection', ws, req));
+});
 const rooms = new Map();
 let nextId = 1;
 
@@ -146,8 +161,7 @@ function onListenError(err) {
   throw err;
 }
 server.on('error', onListenError);
-wss.on('error', onListenError);
 
 server.listen(PORT, '0.0.0.0', () => {
-  console.log(`Chef Showdown server on http://localhost:${PORT}  (websocket /ws, serving ${ROOT})`);
+  console.log(`Chef Showdown server on http://localhost:${PORT}${BASE}/  (websocket ${BASE}/ws, serving ${ROOT})`);
 });

@@ -1,0 +1,12 @@
+services:
+  chef-showdown:
+    image: ghcr.io/eldinbegano/chef-showdown:latest
+    container_name: chef-showdown
+    restart: unless-stopped
+    init: true
+    environment:
+      # Path prefix the reverse proxy forwards unchanged (do not strip it), e.g. https://example.com/chef-showdown/
+      BASE_PATH: /chef-showdown
+    ports:
+      # Drop this if the proxy runs in the same Docker network (use http://chef-showdown:5200).
+      - "5200:5200"
